@@ -164,13 +164,26 @@ brutal_disk_wipe() {
     
     # Kill any processes using the disk
     log_info "Stopping any processes using $DISK"
-    fuser -km "$DISK"* 2>/dev/null || true
+    # fuser might not be available, so use alternative approach
+    if command -v fuser >/dev/null 2>&1; then
+        fuser -km "$DISK"* 2>/dev/null || true
+    else
+        log_warning "fuser command not available, skipping process termination"
+    fi
     
     # Unmount everything
     log_info "Unmounting all partitions on $DISK"
-    for partition in $(ls ${DISK}* 2>/dev/null); do
-        umount "$partition" 2>/dev/null || true
-    done
+    # More robust partition detection
+    if ls "${DISK}"* >/dev/null 2>&1; then
+        for partition in $(ls ${DISK}* 2>/dev/null || true); do
+            if [ "$partition" != "$DISK" ]; then
+                log_info "Unmounting $partition"
+                umount "$partition" 2>/dev/null || true
+            fi
+        done
+    else
+        log_info "No existing partitions found on $DISK"
+    fi
     
     # Wait for unmounts
     sleep 2
@@ -180,10 +193,19 @@ brutal_disk_wipe() {
     dd if=/dev/zero of="$DISK" bs=1M count=100 2>/dev/null || true
     
     # Clear any remaining filesystem signatures
-    wipefs -af "$DISK" 2>/dev/null || true
+    if command -v wipefs >/dev/null 2>&1; then
+        wipefs -af "$DISK" 2>/dev/null || true
+    else
+        log_warning "wipefs not available, skipping filesystem signature clearing"
+    fi
     
     # Force kernel to re-read partition table
-    partprobe "$DISK" 2>/dev/null || true
+    if command -v partprobe >/dev/null 2>&1; then
+        partprobe "$DISK" 2>/dev/null || true
+    else
+        log_warning "partprobe not available, using blockdev instead"
+        blockdev --rereadpt "$DISK" 2>/dev/null || true
+    fi
     
     log_info "Disk wipe completed - $DISK is now clean"
 }

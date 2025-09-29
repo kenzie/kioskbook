@@ -189,20 +189,16 @@ get_configuration() {
         GITHUB_URL="https://github.com/$GITHUB_REPO.git"
     fi
     
-    # Get Tailscale auth key
-    echo -n -e "${CYAN}Tailscale auth key (required)${NC}: "
-    read TAILSCALE_KEY
-    
-    if [ -z "$TAILSCALE_KEY" ]; then
-        log_error "Tailscale auth key is required for installation!"
-        exit 1
-    fi
+    # Tailscale will be installed but not authenticated
+    log_info "Tailscale will be installed but not authenticated"
+    log_info "You can authenticate it later via SSH"
+    TAILSCALE_KEY=""
     
     echo
     echo -e "${CYAN}Installation Summary:${NC}"
     echo "Target Disk: $DISK"
     echo "Kiosk App: $GITHUB_REPO"
-    echo "Tailscale: Enabled (Required)"
+    echo "Tailscale: Installed (Authenticate later via SSH)"
     echo
     echo -n "Proceed with installation? (y/N): "
     read confirm
@@ -576,10 +572,14 @@ setup_tailscale() {
     # Copy Tailscale configuration
     cp config/tailscaled.conf /mnt/root/etc/conf.d/tailscaled
     
-    # Copy Tailscale auth script and replace auth key
-    cp config/tailscale-auth.start /mnt/root/etc/local.d/tailscale-auth.start
-    sed -i "s/TAILSCALE_KEY/$TAILSCALE_KEY/g" /mnt/root/etc/local.d/tailscale-auth.start
-    chmod +x /mnt/root/etc/local.d/tailscale-auth.start
+    # Copy Tailscale auth script (only if auth key provided)
+    if [ -n "$TAILSCALE_KEY" ]; then
+        cp config/tailscale-auth.start /mnt/root/etc/local.d/tailscale-auth.start
+        sed -i "s/TAILSCALE_KEY/$TAILSCALE_KEY/g" /mnt/root/etc/local.d/tailscale-auth.start
+        chmod +x /mnt/root/etc/local.d/tailscale-auth.start
+    else
+        log_info "Tailscale auth script not created - authenticate manually later"
+    fi
     
     # Enable Tailscale
     chroot /mnt/root rc-update add tailscaled default

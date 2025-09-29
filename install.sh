@@ -67,7 +67,7 @@ validate_environment() {
     alpine_detected=false
     
     # Check for Alpine release file
-    if [ -f /etc/alpine_release ]; then
+    if [ -f /etc/alpine-release ]; then
         alpine_detected=true
     fi
     

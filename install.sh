@@ -13,7 +13,7 @@
 # - Internet connection
 #
 # Usage: 
-#   wget https://raw.githubusercontent.com/kenzie/kioskbook/main/install.sh
+#   wget https://raw.githubusercontent.com/kenzie/kioskbook/modular-install/install.sh
 #   bash install.sh
 #
 
@@ -78,6 +78,15 @@ get_configuration() {
     if [ -z "$KIOSKBOOK_REPO" ]; then
         KIOSKBOOK_REPO="https://github.com/kenzie/kioskbook.git"
         log_info "Using default KioskBook repository: $KIOSKBOOK_REPO"
+    fi
+    
+    # Ask for branch (default to modular-install for now)
+    echo -e "\n${CYAN}Branch to use${NC}"
+    echo -n -e "(default: modular-install): "
+    read KIOSKBOOK_BRANCH
+    if [ -z "$KIOSKBOOK_BRANCH" ]; then
+        KIOSKBOOK_BRANCH="modular-install"
+        log_info "Using default branch: $KIOSKBOOK_BRANCH"
     fi
 
     # GitHub repo for Vue.js application
@@ -190,8 +199,8 @@ clone_kioskbook() {
         rm -rf $KIOSKBOOK_DIR
     fi
     
-    log_info "Cloning KioskBook from $KIOSKBOOK_REPO..."
-    git clone $KIOSKBOOK_REPO $KIOSKBOOK_DIR
+    log_info "Cloning KioskBook from $KIOSKBOOK_REPO (branch: $KIOSKBOOK_BRANCH)..."
+    git clone -b $KIOSKBOOK_BRANCH $KIOSKBOOK_REPO $KIOSKBOOK_DIR
 
     # Make sure all scripts are executable
     find $KIOSKBOOK_DIR -name "*.sh" -exec chmod +x {} \;

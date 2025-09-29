@@ -162,14 +162,21 @@ get_configuration() {
 brutal_disk_wipe() {
     log_step "BRUTAL DISK WIPE: $DISK"
     
+    # Temporarily disable error exit for cleanup commands
+    set +e
+    
     # Kill any processes using the disk
     log_info "Stopping any processes using $DISK"
     # fuser might not be available, so use alternative approach
     if command -v fuser >/dev/null 2>&1; then
-        fuser -km "$DISK"* 2>/dev/null || true
+        log_info "Found fuser command, attempting to kill processes"
+        fuser -km "$DISK"* 2>/dev/null
+        log_info "fuser command completed"
     else
         log_warning "fuser command not available, skipping process termination"
     fi
+    
+    log_info "DEBUG: Past fuser command, continuing with unmount"
     
     # Unmount everything
     log_info "Unmounting all partitions on $DISK"
@@ -206,6 +213,9 @@ brutal_disk_wipe() {
         log_warning "partprobe not available, using blockdev instead"
         blockdev --rereadpt "$DISK" 2>/dev/null || true
     fi
+    
+    # Re-enable error exit
+    set -e
     
     log_info "Disk wipe completed - $DISK is now clean"
 }

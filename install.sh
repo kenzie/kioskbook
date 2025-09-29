@@ -328,12 +328,8 @@ install_system() {
     umount /mnt/root 2>/dev/null || true
     umount /mnt/boot 2>/dev/null || true
     
-    # Install Alpine Linux base system
-    log_info "Installing Alpine Linux base system..."
-    setup-disk -m sys /mnt/root "$ROOT_PARTITION"
-    
-    # Remount partitions
-    log_info "Remounting partitions..."
+    # Mount root partition
+    log_info "Mounting root partition..."
     mount "$ROOT_PARTITION" /mnt/root
     mount "$EFI_PARTITION" /mnt/boot
     mount --bind /mnt/boot /mnt/root/boot
@@ -343,6 +339,14 @@ install_system() {
         log_error "/mnt/root is not properly mounted"
         exit 1
     fi
+    
+    # Install Alpine Linux base system manually
+    log_info "Installing Alpine Linux base system..."
+    
+    # Download and extract Alpine rootfs
+    cd /tmp
+    wget https://dl-cdn.alpinelinux.org/alpine/v3.22/releases/x86_64/alpine-minirootfs-3.22.1-x86_64.tar.gz
+    tar -xzf alpine-minirootfs-3.22.1-x86_64.tar.gz -C /mnt/root
     
     # Setup apk
     setup-apkcache /mnt/root/cache

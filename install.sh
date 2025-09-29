@@ -158,30 +158,10 @@ run_installation_steps() {
     log_step "Running Installation Steps"
     
     # Define the installation steps in order
-    local steps=(
-        "prepare_disk"
-        "setup_network"
-        "setup_minimal_boot" 
-        "setup_fstab"
-        "install_kiosk_system"
-        "setup_kiosk_user"
-        "setup_kiosk_app"
-        "setup_kiosk_watchdog"
-        "setup_auto_update"
-        "setup_screensaver"
-        "setup_kiosk_cli"
-        "setup_resource_management"
-        "setup_escalating_recovery"
-        "setup_logging_debugging"
-        "setup_boot_logo"
-        "setup_hardware_optimizations"
-        "setup_tailscale"
-        "apply_optimizations"
-        "create_tools"
-    )
+    local steps="prepare_disk setup_network setup_minimal_boot setup_fstab install_kiosk_system setup_kiosk_user setup_kiosk_app setup_kiosk_watchdog setup_auto_update setup_screensaver setup_kiosk_cli setup_resource_management setup_escalating_recovery setup_logging_debugging setup_boot_logo setup_hardware_optimizations setup_tailscale apply_optimizations create_tools"
     
     # Run each step
-    for step in "${steps[@]}"; do
+    for step in $steps; do
         if declare -f "$step" > /dev/null; then
             log_info "Running: $step"
             "$step"
@@ -218,8 +198,8 @@ validate_environment() {
     fi
     
     # Check for required tools
-    local required_tools=("parted" "mkfs.ext4" "mkfs.fat" "mount" "chroot")
-    for tool in "${required_tools[@]}"; do
+    local required_tools="parted mkfs.ext4 mkfs.fat mount chroot"
+    for tool in $required_tools; do
         if ! command -v "$tool" >/dev/null 2>&1; then
             log_error "Required tool '$tool' not found"
             log_error "Please install missing tools: apk add parted e2fsprogs dosfstools util-linux"

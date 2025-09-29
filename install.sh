@@ -120,6 +120,7 @@ validate_environment() {
     which mount || log_info "mount not found"
     which chroot || log_info "chroot not found"
     which lsblk || log_info "lsblk not found"
+    which setup-disk || log_info "setup-disk not found"
     
     # Try to install basic tools if missing
     log_info "Attempting to install basic tools..."
@@ -310,6 +311,10 @@ prepare_disk() {
 # Install basic system
 install_system() {
     log_step "Installing Alpine Linux System"
+    
+    # Install Alpine Linux base system
+    log_info "Installing Alpine Linux base system..."
+    setup-disk -m sys /mnt/root "$DISK"
     
     # Setup apk
     setup-apkcache /mnt/root/cache

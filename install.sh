@@ -1,5 +1,6 @@
 #!/bin/bash
 # KioskBook Modular Installation Script
+# Note: This script requires bash, not ash
 
 # Error handling
 set -e
@@ -158,10 +159,30 @@ run_installation_steps() {
     log_step "Running Installation Steps"
     
     # Define the installation steps in order
-    local steps="prepare_disk setup_network setup_minimal_boot setup_fstab install_kiosk_system setup_kiosk_user setup_kiosk_app setup_kiosk_watchdog setup_auto_update setup_screensaver setup_kiosk_cli setup_resource_management setup_escalating_recovery setup_logging_debugging setup_boot_logo setup_hardware_optimizations setup_tailscale apply_optimizations create_tools"
+    local steps=(
+        "prepare_disk"
+        "setup_network"
+        "setup_minimal_boot" 
+        "setup_fstab"
+        "install_kiosk_system"
+        "setup_kiosk_user"
+        "setup_kiosk_app"
+        "setup_kiosk_watchdog"
+        "setup_auto_update"
+        "setup_screensaver"
+        "setup_kiosk_cli"
+        "setup_resource_management"
+        "setup_escalating_recovery"
+        "setup_logging_debugging"
+        "setup_boot_logo"
+        "setup_hardware_optimizations"
+        "setup_tailscale"
+        "apply_optimizations"
+        "create_tools"
+    )
     
     # Run each step
-    for step in $steps; do
+    for step in "${steps[@]}"; do
         if declare -f "$step" > /dev/null; then
             log_info "Running: $step"
             "$step"
@@ -176,6 +197,20 @@ run_installation_steps() {
 # Validate installation environment
 validate_environment() {
     log_step "Validating Installation Environment"
+    
+    # Check if bash is available
+    if ! command -v bash >/dev/null 2>&1; then
+        log_error "This script requires bash, but bash is not installed"
+        log_error "Please install bash: apk add bash"
+        exit 1
+    fi
+    
+    # Check if we're running under bash
+    if [ -z "$BASH_VERSION" ]; then
+        log_error "This script must be run with bash, not ash"
+        log_error "Please run: bash install.sh"
+        exit 1
+    fi
     
     # Check if running as root
     if [ "$EUID" -ne 0 ]; then
@@ -198,8 +233,8 @@ validate_environment() {
     fi
     
     # Check for required tools
-    local required_tools="parted mkfs.ext4 mkfs.fat mount chroot"
-    for tool in $required_tools; do
+    local required_tools=("parted" "mkfs.ext4" "mkfs.fat" "mount" "chroot")
+    for tool in "${required_tools[@]}"; do
         if ! command -v "$tool" >/dev/null 2>&1; then
             log_error "Required tool '$tool' not found"
             log_error "Please install missing tools: apk add parted e2fsprogs dosfstools util-linux"
@@ -229,14 +264,12 @@ handle_error() {
         log_info "Attempting to cleanup..."
         
         # Unmount partitions in reverse order
-        if [ -n "$MOUNTED_PARTITIONS" ]; then
-            for partition in $MOUNTED_PARTITIONS; do
-                if mount | grep -q "$partition"; then
-                    log_info "Unmounting $partition"
-                    umount "$partition" 2>/dev/null || true
-                fi
-            done
-        fi
+        for partition in "${MOUNTED_PARTITIONS[@]}"; do
+            if mount | grep -q "$partition"; then
+                log_info "Unmounting $partition"
+                umount "$partition" 2>/dev/null || true
+            fi
+        done
         
         # Remove mount points
         umount /mnt/root/boot 2>/dev/null || true

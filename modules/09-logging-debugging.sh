@@ -38,7 +38,7 @@ EOF
 # KioskBook Structured Logging Framework
 
 LOG_DIR="/var/log/kioskbook"
-LOG_LEVELS="DEBUG INFO WARN ERROR CRITICAL"
+LOG_LEVELS=("DEBUG" "INFO" "WARN" "ERROR" "CRITICAL")
 CURRENT_LEVEL="INFO"
 
 # Ensure log directory exists
@@ -90,7 +90,7 @@ log_critical() { log "CRITICAL" "$1" "$2"; }
 
 # Set log level
 set_log_level() {
-    if echo "$LOG_LEVELS" | grep -q " $1 "; then
+    if [[ " ${LOG_LEVELS[@]} " =~ " $1 " ]]; then
         CURRENT_LEVEL="$1"
         log_info "LOGGER" "Log level set to $1"
     else

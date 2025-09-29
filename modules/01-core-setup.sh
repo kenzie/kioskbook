@@ -62,11 +62,11 @@ prepare_disk() {
     
     # Mount root partition
     mount "$ROOT_PARTITION" /mnt/root
-    MOUNTED_PARTITIONS="$MOUNTED_PARTITIONS $ROOT_PARTITION"
+    MOUNTED_PARTITIONS+=("$ROOT_PARTITION")
     
     # Mount EFI partition
     mount "$EFI_PARTITION" /mnt/boot
-    MOUNTED_PARTITIONS="$MOUNTED_PARTITIONS $EFI_PARTITION"
+    MOUNTED_PARTITIONS+=("$EFI_PARTITION")
     
     # Create boot directory in root
     mkdir -p /mnt/root/boot

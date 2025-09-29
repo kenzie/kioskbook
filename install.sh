@@ -1,6 +1,15 @@
 #!/bin/bash
-# KioskBook One-Shot Debian Installer
-# Complete kiosk installation from bare metal to running kiosk
+#
+# KioskBook Phase 1: Brutal Debian Installation
+# 
+# Establishes a clean, bootable Debian system on Lenovo M75q-1
+# NVMe drive will be COMPLETELY ERASED
+#
+# Usage:
+# 1. Boot from Debian netinst USB
+# 2. Select "Advanced options > Rescue mode"
+# 3. Drop to shell, run: bash install.sh
+#
 
 set -e
 
@@ -12,533 +21,416 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-# Global variables
-DISK="/dev/nvme0n1"
-GITHUB_REPO=""
-GITHUB_URL=""
-ROOT_PASSWORD=""
+# Configuration
+HOSTNAME="kioskbook"
+INSTALL_DISK="/dev/nvme0n1"
+TIMEZONE="America/Halifax"
 
-# Logging functions
+show_banner() {
+    clear
+    echo -e "${CYAN}"
+    echo "╔═══════════════════════════════════════════════════════╗"
+    echo "║                                                       ║"
+    echo "║              KIOSKBOOK PHASE 1                        ║"
+    echo "║         Brutal Debian Installation                    ║"
+    echo "║                                                       ║"
+    echo "║    Lenovo M75q-1 | Debian 12 | NVMe Install          ║"
+    echo "║                                                       ║"
+    echo "╚═══════════════════════════════════════════════════════╝"
+    echo -e "${NC}"
+}
+
 log_info() {
     echo -e "${GREEN}[INFO]${NC} $1"
 }
 
-log_step() {
-    echo -e "${BLUE}[STEP]${NC} $1"
+log_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
 }
 
 log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
+    exit 1
 }
 
-log_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
+log_step() {
+    echo -e "\n${BLUE}===${NC} ${CYAN}$1${NC} ${BLUE}===${NC}\n"
 }
 
-# Show banner
-show_banner() {
-    # clear command may not be available in minimal environment
-    printf "\033c" 2>/dev/null || true
-    echo -e "${CYAN}"
-    echo "┌─────────────────────────────────────┐"
-    echo "│                                     │"
-    echo "│          KioskBook Installer        │"
-    echo "│       One-Shot Debian Kiosk        │"
-    echo "│                                     │"
-    echo "└─────────────────────────────────────┘"
-    echo -e "${NC}"
-    echo -e "${CYAN}Lenovo M75q-1 + Debian Stable${NC}"
-    echo
-}
-
-# Validate environment
-validate_environment() {
-    log_step "Validating Installation Environment"
-    
-    # Check if running as root
-    if [ "$(id -u)" -ne 0 ]; then
-        log_error "This script must be run as root"
-        exit 1
-    fi
-    
-    # Check for NVMe drive
-    if [ ! -b "$DISK" ]; then
-        log_error "NVMe drive $DISK not found"
-        log_error "This installer is designed for Lenovo M75q-1"
-        exit 1
-    fi
-    
-    # Check network connectivity
-    if ! ping -c 1 8.8.8.8 >/dev/null 2>&1; then
-        log_error "No internet connection - ensure ethernet is connected"
-        exit 1
-    fi
-    
-    # Check for required tools and try to install missing ones
-    log_info "Checking for required tools..."
-    
-    # Core tools that should be available
-    MISSING_TOOLS=""
-    for tool in debootstrap parted mkfs.ext4 mkfs.fat; do
-        if ! command -v "$tool" >/dev/null 2>&1; then
-            MISSING_TOOLS="$MISSING_TOOLS $tool"
-        fi
-    done
-    
-    # Try to install missing tools
-    if [ -n "$MISSING_TOOLS" ]; then
-        log_warning "Missing tools:$MISSING_TOOLS"
-        log_info "Attempting to install missing tools..."
-        
-        if command -v apt-get >/dev/null 2>&1; then
-            apt-get update >/dev/null 2>&1
-            apt-get install -y debootstrap parted e2fsprogs dosfstools util-linux >/dev/null 2>&1
-        else
-            log_error "Cannot install missing tools - please use Debian Live ISO"
-            exit 1
-        fi
-        
-        # Check again
-        for tool in debootstrap parted mkfs.ext4 mkfs.fat; do
-            if ! command -v "$tool" >/dev/null 2>&1; then
-                log_error "Still missing required tool: $tool"
-                log_error "Please use Debian Live ISO instead of installer environment"
-                exit 1
-            fi
-        done
-    fi
-    
-    log_info "Environment validation passed"
-}
-
-# Get configuration from user
+# Get user configuration
 get_configuration() {
-    echo -e "${CYAN}KioskBook Configuration${NC}"
-    echo "======================="
-    echo
+    log_step "Configuration"
     
-    # Disk warning
-    echo -e "${YELLOW}WARNING: This will completely erase $DISK${NC}"
-    echo -e "${RED}All data on this NVMe drive will be permanently lost!${NC}"
-    echo
-    echo -n -e "${CYAN}Continue? (y/N)${NC}: "
-    read confirm
-    
-    if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
-        log_info "Installation cancelled"
-        exit 0
-    fi
-    printf "\033c" 2>/dev/null || true
-    
-    # Get GitHub repository
-    echo -n -e "${CYAN}Kiosk application repository${NC} [kenzie/lobby-display]: "
+    # GitHub repo for Vue.js application
+    echo -n -e "${CYAN}Vue.js application git repository${NC}: "
     read GITHUB_REPO
-    
     if [ -z "$GITHUB_REPO" ]; then
-        GITHUB_REPO="kenzie/lobby-display"
-        log_info "Using default repository: $GITHUB_REPO"
+        log_error "GitHub repository is required"
     fi
     
-    # Convert to GitHub URL
-    if echo "$GITHUB_REPO" | grep -q "github.com"; then
-        GITHUB_URL="$GITHUB_REPO"
-    else
-        GITHUB_URL="https://github.com/$GITHUB_REPO.git"
-    fi
-    printf "\033c" 2>/dev/null || true
-    
-    # Set root password
-    echo -e "${CYAN}Set root password for remote access${NC}"
-    while true; do
-        echo -n "Enter root password: "
-        read -s ROOT_PASSWORD
-        echo
-        echo -n "Confirm root password: "
-        read -s ROOT_PASSWORD_CONFIRM
-        echo
-        
-        if [ "$ROOT_PASSWORD" = "$ROOT_PASSWORD_CONFIRM" ]; then
-            if [ -n "$ROOT_PASSWORD" ]; then
-                break
-            else
-                log_error "Password cannot be empty!"
-            fi
-        else
-            log_error "Passwords do not match!"
-        fi
-    done
-    printf "\033c" 2>/dev/null || true
-    
-    # Final confirmation
-    echo -e "${CYAN}Installation Summary:${NC}"
-    echo "Target: $DISK (will be erased)"
-    echo "Kiosk App: $GITHUB_REPO"
-    echo "OS: Debian Stable (minimal)"
-    echo "Boot: Fast, no boot menu"
-    echo "Features: SSH, Tailscale, offline operation"
+    # Root password
+    echo -n -e "${CYAN}Root password for SSH access${NC}: "
+    read -s ROOT_PASSWORD
     echo
-    echo -n "Proceed with installation? (y/N): "
-    read final_confirm
-    printf "\033c" 2>/dev/null || true
+    echo -n -e "${CYAN}Confirm password${NC}: "
+    read -s ROOT_PASSWORD_CONFIRM
+    echo
     
-    if [ "$final_confirm" != "y" ] && [ "$final_confirm" != "Y" ]; then
-        log_info "Installation cancelled"
-        exit 0
+    if [ "$ROOT_PASSWORD" != "$ROOT_PASSWORD_CONFIRM" ]; then
+        log_error "Passwords don't match"
+    fi
+    
+    if [ ${#ROOT_PASSWORD} -lt 8 ]; then
+        log_error "Password must be at least 8 characters"
     fi
 }
 
-# Prepare disk with partitions
-prepare_disk() {
-    log_step "Preparing Disk: $DISK"
+# Show summary and get brutal confirmation
+show_summary() {
+    log_step "Installation Summary"
     
-    # Unmount any existing mounts
-    log_info "Unmounting any existing partitions"
-    for partition in $(lsblk -ln -o NAME "$DISK" | tail -n +2); do
-        umount "/dev/$partition" 2>/dev/null || true
-    done
+    echo -e "${CYAN}Hostname:${NC}         $HOSTNAME"
+    echo -e "${CYAN}Target Disk:${NC}      $INSTALL_DISK"
+    echo -e "${CYAN}Timezone:${NC}         $TIMEZONE"
+    echo -e "${CYAN}Application:${NC}      $GITHUB_REPO"
+    echo -e "${CYAN}SSH Access:${NC}       Enabled with root password"
     
-    # Wipe disk
-    log_info "Wiping disk and partition table"
-    if command -v wipefs >/dev/null 2>&1; then
-        wipefs -af "$DISK"
-    else
-        log_warning "wipefs not available, using dd only"
+    echo -e "\n${RED}╔═══════════════════════════════════════════════════════╗${NC}"
+    echo -e "${RED}║                                                       ║${NC}"
+    echo -e "${RED}║  WARNING: ALL DATA ON $INSTALL_DISK WILL BE DESTROYED  ║${NC}"
+    echo -e "${RED}║                                                       ║${NC}"
+    echo -e "${RED}║  This action is IRREVERSIBLE and IMMEDIATE            ║${NC}"
+    echo -e "${RED}║                                                       ║${NC}"
+    echo -e "${RED}╚═══════════════════════════════════════════════════════╝${NC}"
+    
+    echo -e "\n${YELLOW}To confirm, type exactly:${NC} ${RED}DESTROY${NC}"
+    echo -n "> "
+    read CONFIRM
+    
+    if [ "$CONFIRM" != "DESTROY" ]; then
+        log_error "Installation cancelled - confirmation failed"
     fi
-    dd if=/dev/zero of="$DISK" bs=1M count=100 status=none 2>/dev/null || dd if=/dev/zero of="$DISK" bs=1M count=100
+}
+
+# Verify hardware
+verify_hardware() {
+    log_step "Hardware Verification"
     
-    # Create GPT partition table
-    log_info "Creating partition table"
-    parted "$DISK" --script mklabel gpt
+    # Check if NVMe drive exists
+    if [ ! -b "$INSTALL_DISK" ]; then
+        log_error "NVMe drive $INSTALL_DISK not found!"
+    fi
     
-    # Create EFI partition (512MB)
-    log_info "Creating EFI partition (512MB)"
-    parted "$DISK" --script mkpart primary fat32 1MiB 513MiB
-    parted "$DISK" --script set 1 esp on
+    DISK_SIZE=$(lsblk -dno SIZE $INSTALL_DISK)
+    log_info "Found NVMe drive: $INSTALL_DISK ($DISK_SIZE)"
     
-    # Create root partition (remaining space)
-    log_info "Creating root partition (remaining space)"
-    parted "$DISK" --script mkpart primary ext4 513MiB 100%
+    # Check for AMD GPU
+    if lspci | grep -i amd | grep -i vga >/dev/null 2>&1; then
+        GPU_INFO=$(lspci | grep -i amd | grep -i vga | head -1)
+        log_info "Detected AMD GPU: $GPU_INFO"
+    fi
     
-    # Wait for partition creation
+    # Check network
+    if ! ping -c 1 8.8.8.8 >/dev/null 2>&1; then
+        log_error "No network connectivity - ethernet required"
+    fi
+    log_info "Network connectivity verified"
+}
+
+# Brutally wipe and partition disk
+partition_disk() {
+    log_step "Disk Partitioning"
+    
+    log_warn "Wiping $INSTALL_DISK..."
+    
+    # Unmount anything mounted
+    umount ${INSTALL_DISK}* 2>/dev/null || true
+    
+    # Zero out partition table
+    dd if=/dev/zero of=$INSTALL_DISK bs=512 count=1 conv=notrunc
+    
+    # Create GPT partition table with optimal alignment
+    parted -s $INSTALL_DISK mklabel gpt
+    parted -s $INSTALL_DISK mkpart primary fat32 1MiB 513MiB
+    parted -s $INSTALL_DISK set 1 esp on
+    parted -s $INSTALL_DISK mkpart primary ext4 513MiB 100%
+    
+    # Wait for kernel to recognize partitions
     sleep 2
-    partprobe "$DISK"
+    partprobe $INSTALL_DISK
     sleep 2
     
     # Format partitions
-    log_info "Formatting partitions"
-    mkfs.fat -F32 "${DISK}p1"
-    mkfs.ext4 -F "${DISK}p2"
+    log_info "Formatting partitions..."
+    mkfs.fat -F32 -n BOOT ${INSTALL_DISK}p1
+    mkfs.ext4 -F -L debian-root -O ^metadata_csum,^64bit ${INSTALL_DISK}p2
     
-    log_info "Disk preparation completed"
+    log_info "Disk partitioning complete"
 }
 
-# Install minimal Debian base system
-install_debian_base() {
+# Mount filesystems
+mount_filesystems() {
+    log_step "Mounting Filesystems"
+    
+    # Create mount point
+    mkdir -p /mnt/debian
+    
+    # Mount root partition with optimal options
+    mount -o noatime,nodiratime ${INSTALL_DISK}p2 /mnt/debian
+    
+    # Create and mount boot partition
+    mkdir -p /mnt/debian/boot/efi
+    mount ${INSTALL_DISK}p1 /mnt/debian/boot/efi
+    
+    log_info "Filesystems mounted at /mnt/debian"
+}
+
+# Install base Debian system
+install_base_system() {
     log_step "Installing Debian Base System"
     
-    # Mount root partition
-    log_info "Mounting target filesystem"
-    mount "${DISK}p2" /mnt
+    # Install debootstrap if needed
+    if ! command -v debootstrap &> /dev/null; then
+        log_info "Installing debootstrap..."
+        apt-get update
+        apt-get install -y debootstrap
+    fi
     
-    # Install Debian base system using debootstrap
-    log_info "Installing Debian base system (this may take several minutes)"
-    debootstrap --arch=amd64 --variant=minbase stable /mnt http://deb.debian.org/debian
-    
-    # Mount special filesystems
-    log_info "Setting up chroot environment"
-    mount "${DISK}p1" /mnt/boot
-    mount --bind /dev /mnt/dev
-    mount --bind /proc /mnt/proc
-    mount --bind /sys /mnt/sys
-    
-    # Configure basic system files
-    log_info "Configuring base system"
-    
-    # Set hostname
-    echo "kioskbook" > /mnt/etc/hostname
-    
-    # Configure hosts
-    cat > /mnt/etc/hosts << EOF
-127.0.0.1   localhost
-127.0.1.1   kioskbook
-::1         localhost ip6-localhost ip6-loopback
-EOF
-    
-    # Configure network
-    cat > /mnt/etc/network/interfaces << EOF
-auto lo
-iface lo inet loopback
-
-auto eth0
-iface eth0 inet dhcp
-EOF
-    
-    # Configure fstab
-    ROOT_UUID=$(blkid -s UUID -o value "${DISK}p2")
-    EFI_UUID=$(blkid -s UUID -o value "${DISK}p1")
-    
-    cat > /mnt/etc/fstab << EOF
-UUID=$ROOT_UUID / ext4 defaults 0 1
-UUID=$EFI_UUID /boot vfat defaults 0 2
-tmpfs /tmp tmpfs defaults,nodev,nosuid,noexec 0 0
-EOF
+    # Bootstrap minimal Debian system
+    log_info "Bootstrapping Debian 12 (bookworm)..."
+    debootstrap --arch=amd64 --variant=minbase bookworm /mnt/debian http://deb.debian.org/debian
     
     log_info "Debian base system installed"
 }
 
-# Install and configure packages
-install_packages() {
-    log_step "Installing Kiosk Packages"
+# Configure base system
+configure_system() {
+    log_step "Configuring Base System"
     
-    # Copy DNS configuration
-    cp /etc/resolv.conf /mnt/etc/resolv.conf
+    # Set hostname
+    echo "$HOSTNAME" > /mnt/debian/etc/hostname
     
-    # Update package list
-    log_info "Updating package repositories"
-    chroot /mnt apt-get update
+    # Configure hosts
+    cat > /mnt/debian/etc/hosts << EOF
+127.0.0.1       localhost
+127.0.1.1       $HOSTNAME
+::1             localhost ip6-localhost ip6-loopback
+EOF
+    
+    # Configure fstab
+    cat > /mnt/debian/etc/fstab << EOF
+# <file system> <mount point>   <type>  <options>       <dump>  <pass>
+${INSTALL_DISK}p2  /               ext4    noatime,nodiratime,errors=remount-ro 0 1
+${INSTALL_DISK}p1  /boot/efi       vfat    defaults        0 2
+tmpfs              /tmp            tmpfs   defaults,noatime,mode=1777 0 0
+EOF
+    
+    # Configure network
+    cat > /mnt/debian/etc/network/interfaces << EOF
+auto lo
+iface lo inet loopback
+
+allow-hotplug enp*
+iface enp* inet dhcp
+EOF
+    
+    # Set timezone
+    ln -sf /usr/share/zoneinfo/$TIMEZONE /mnt/debian/etc/localtime
+    
+    # Configure apt sources
+    cat > /mnt/debian/etc/apt/sources.list << EOF
+deb http://deb.debian.org/debian bookworm main non-free-firmware
+deb http://security.debian.org/debian-security bookworm-security main non-free-firmware
+deb http://deb.debian.org/debian bookworm-updates main non-free-firmware
+EOF
+    
+    log_info "Base system configured"
+}
+
+# Install essential packages
+install_essential_packages() {
+    log_step "Installing Essential Packages"
+    
+    # Mount necessary filesystems for chroot
+    mount --bind /dev /mnt/debian/dev
+    mount --bind /dev/pts /mnt/debian/dev/pts
+    mount --bind /proc /mnt/debian/proc
+    mount --bind /sys /mnt/debian/sys
+    
+    # Update package database
+    chroot /mnt/debian apt-get update
     
     # Install essential packages
-    log_info "Installing essential packages"
-    DEBIAN_FRONTEND=noninteractive chroot /mnt apt-get install -y \
-        systemd-boot \
+    log_info "Installing kernel and essential packages..."
+    chroot /mnt/debian apt-get install -y --no-install-recommends \
         linux-image-amd64 \
+        grub-efi-amd64 \
         firmware-linux \
+        firmware-amd-graphics \
         openssh-server \
-        sudo \
+        ca-certificates \
         curl \
         wget \
         git \
-        ca-certificates \
-        apt-transport-https \
-        gnupg \
-        lsb-release
+        sudo \
+        systemd-timesyncd
     
-    # Install X11 and desktop packages
-    log_info "Installing X11 and display packages"
-    DEBIAN_FRONTEND=noninteractive chroot /mnt apt-get install -y \
-        xorg \
-        xserver-xorg-video-intel \
-        xserver-xorg-video-amdgpu \
-        chromium \
-        openbox \
-        lightdm \
-        plymouth \
-        plymouth-themes
-    
-    # Install Node.js
-    log_info "Installing Node.js"
-    chroot /mnt curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
-    DEBIAN_FRONTEND=noninteractive chroot /mnt apt-get install -y nodejs
-    
-    # Install Tailscale
-    log_info "Installing Tailscale"
-    chroot /mnt curl -fsSL https://tailscale.com/install.sh | sh
-    
-    # Clean up
-    chroot /mnt apt-get clean
-    
-    log_info "Package installation completed"
+    log_info "Essential packages installed"
 }
 
-# Configure kiosk user and auto-login
-configure_kiosk_user() {
-    log_step "Configuring Kiosk User"
+# Configure SSH
+configure_ssh() {
+    log_step "Configuring SSH"
     
     # Set root password
-    log_info "Setting root password"
-    echo "root:$ROOT_PASSWORD" | chroot /mnt chpasswd
+    echo "root:$ROOT_PASSWORD" | chroot /mnt/debian chpasswd
     
-    # Create kiosk user
-    log_info "Creating kiosk user"
-    chroot /mnt useradd -m -s /bin/bash -G sudo,video,audio kiosk
-    echo "kiosk:kiosk123" | chroot /mnt chpasswd
+    # Enable SSH
+    chroot /mnt/debian systemctl enable ssh
     
-    # Configure auto-login
-    log_info "Configuring auto-login"
-    cat > /mnt/etc/lightdm/lightdm.conf << EOF
-[Seat:*]
-autologin-user=kiosk
-autologin-user-timeout=0
-user-session=openbox
+    # Configure SSH for security
+    cat >> /mnt/debian/etc/ssh/sshd_config << EOF
+
+# KioskBook security settings
+PermitRootLogin yes
+PasswordAuthentication yes
+PubkeyAuthentication yes
 EOF
     
-    # Enable lightdm
-    chroot /mnt systemctl enable lightdm
-    
-    log_info "Kiosk user configuration completed"
+    log_info "SSH configured with root access"
 }
 
-# Setup kiosk application
-setup_kiosk_application() {
-    log_step "Setting Up Kiosk Application"
+# Install and configure GRUB
+install_bootloader() {
+    log_step "Installing GRUB Bootloader"
     
-    # Create application directory
-    log_info "Creating application directory"
-    mkdir -p /mnt/home/kiosk/kiosk-app
+    # Install GRUB to EFI partition
+    chroot /mnt/debian grub-install --target=x86_64-efi \
+        --efi-directory=/boot/efi \
+        --bootloader-id=debian \
+        --recheck
     
-    # Clone repository
-    log_info "Cloning application repository: $GITHUB_URL"
-    chroot /mnt git clone "$GITHUB_URL" /home/kiosk/kiosk-app
-    chroot /mnt chown -R kiosk:kiosk /home/kiosk/kiosk-app
+    # Configure GRUB for fast boot
+    cat > /mnt/debian/etc/default/grub << EOF
+GRUB_DEFAULT=0
+GRUB_TIMEOUT=0
+GRUB_DISTRIBUTOR="KioskBook"
+GRUB_CMDLINE_LINUX_DEFAULT="quiet loglevel=3 vga=current"
+GRUB_CMDLINE_LINUX=""
+EOF
     
-    # Install application dependencies
-    if [ -f "/mnt/home/kiosk/kiosk-app/package.json" ]; then
-        log_info "Installing application dependencies"
-        chroot /mnt sudo -u kiosk sh -c "cd /home/kiosk/kiosk-app && npm install"
-        
-        # Build if needed
-        if chroot /mnt sudo -u kiosk sh -c "cd /home/kiosk/kiosk-app && npm run --silent 2>/dev/null" | grep -q "build"; then
-            log_info "Building application"
-            chroot /mnt sudo -u kiosk sh -c "cd /home/kiosk/kiosk-app && npm run build"
-        fi
-    fi
+    # Generate GRUB configuration
+    chroot /mnt/debian update-grub
     
-    # Create kiosk startup script
-    log_info "Creating kiosk startup configuration"
-    cat > /mnt/home/kiosk/.config/openbox/autostart << 'EOF'
+    log_info "GRUB bootloader installed"
+}
+
+# Prepare phase 2 and 3 scripts
+prepare_next_phases() {
+    log_step "Preparing Phase 2 and 3 Scripts"
+    
+    # Store configuration for next phases
+    cat > /mnt/debian/root/kioskbook.conf << EOF
+GITHUB_REPO="$GITHUB_REPO"
+HOSTNAME="$HOSTNAME"
+TIMEZONE="$TIMEZONE"
+EOF
+    
+    # Create placeholder scripts
+    cat > /mnt/debian/root/phase2-harden.sh << 'EOF'
 #!/bin/bash
-
-# Disable screensaver and power management
-xset s off
-xset -dpms
-xset s noblank
-
-# Set background
-hsetroot -solid "#000000" &
-
-# Start application server
-cd /home/kiosk/kiosk-app
-if [ -f package.json ] && npm run --silent 2>/dev/null | grep -q "start"; then
-    npm start &
-    sleep 5
-fi
-
-# Start Chromium in kiosk mode
-chromium \
-    --kiosk \
-    --no-sandbox \
-    --disable-dev-shm-usage \
-    --disable-gpu \
-    --disable-extensions \
-    --disable-plugins \
-    --disable-translate \
-    --disable-background-timer-throttling \
-    --disable-backgrounding-occluded-windows \
-    --disable-renderer-backgrounding \
-    --start-fullscreen \
-    --window-size=1920,1080 \
-    --app=http://localhost:3000
+# Phase 2: System Hardening
+# To be implemented
+echo "Phase 2 script ready - will implement Tailscale + monitoring"
 EOF
     
-    mkdir -p /mnt/home/kiosk/.config/openbox
-    chroot /mnt chown -R kiosk:kiosk /home/kiosk/.config
-    chmod +x /mnt/home/kiosk/.config/openbox/autostart
-    
-    log_info "Kiosk application setup completed"
-}
-
-# Configure fast boot
-configure_boot() {
-    log_step "Configuring Fast Boot"
-    
-    # Install systemd-boot
-    log_info "Installing systemd-boot bootloader"
-    chroot /mnt bootctl install
-    
-    # Configure systemd-boot
-    cat > /mnt/boot/loader/loader.conf << EOF
-default debian
-timeout 0
-console-mode max
-editor no
+    cat > /mnt/debian/root/phase3-kiosk.sh << 'EOF'
+#!/bin/bash
+# Phase 3: Kiosk Setup
+# To be implemented
+echo "Phase 3 script ready - will implement X11 + Chromium + Vue.js"
 EOF
     
-    # Create boot entry
-    KERNEL_VERSION=$(chroot /mnt ls /boot | grep vmlinuz | head -1 | sed 's/vmlinuz-//')
-    ROOT_UUID=$(blkid -s UUID -o value "${DISK}p2")
+    chmod +x /mnt/debian/root/phase2-harden.sh
+    chmod +x /mnt/debian/root/phase3-kiosk.sh
     
-    cat > /mnt/boot/loader/entries/debian.conf << EOF
-title Debian
-linux /vmlinuz-$KERNEL_VERSION
-initrd /initrd.img-$KERNEL_VERSION
-options root=UUID=$ROOT_UUID rw quiet splash plymouth.ignore-serial-consoles
-EOF
-    
-    # Configure Plymouth for minimal boot splash
-    log_info "Configuring minimal boot splash"
-    chroot /mnt plymouth-set-default-theme spinner
-    chroot /mnt update-initramfs -u
-    
-    # Optimize boot services
-    log_info "Optimizing boot services"
-    chroot /mnt systemctl disable apt-daily.timer
-    chroot /mnt systemctl disable apt-daily-upgrade.timer
-    chroot /mnt systemctl disable man-db.timer
-    chroot /mnt systemctl enable ssh
-    
-    log_info "Boot configuration completed"
+    log_info "Phase 2 and 3 scripts prepared in /root/"
 }
 
-# Final system configuration
-final_configuration() {
-    log_step "Final System Configuration"
+# Cleanup and finish
+cleanup_and_finish() {
+    log_step "Finalizing Installation"
     
-    # Configure SSH
-    log_info "Configuring SSH access"
-    sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /mnt/etc/ssh/sshd_config
+    # Unmount chroot filesystems
+    umount /mnt/debian/dev/pts
+    umount /mnt/debian/dev
+    umount /mnt/debian/proc
+    umount /mnt/debian/sys
     
-    # Set timezone
-    chroot /mnt timedatectl set-timezone UTC
+    # Unmount main filesystems
+    umount /mnt/debian/boot/efi
+    umount /mnt/debian
     
-    # Clean up
-    log_info "Cleaning up installation"
-    rm -f /mnt/etc/resolv.conf
+    # Sync
+    sync
     
-    # Unmount filesystems
-    log_info "Unmounting filesystems"
-    umount /mnt/sys
-    umount /mnt/proc  
-    umount /mnt/dev
-    umount /mnt/boot
-    umount /mnt
-    
-    log_info "Final configuration completed"
+    log_info "Installation complete!"
 }
 
-# Main installation function
-main() {
-    show_banner
-    validate_environment
-    get_configuration
+# Show completion message
+show_completion() {
+    echo -e "\n${GREEN}╔═══════════════════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║                                                       ║${NC}"
+    echo -e "${GREEN}║       PHASE 1 INSTALLATION COMPLETE!                  ║${NC}"
+    echo -e "${GREEN}║                                                       ║${NC}"
+    echo -e "${GREEN}╚═══════════════════════════════════════════════════════╝${NC}"
     
-    log_step "Starting KioskBook Installation"
+    echo -e "\n${CYAN}System Configuration:${NC}"
+    echo -e "  Hostname: $HOSTNAME"
+    echo -e "  Disk: $INSTALL_DISK"
+    echo -e "  SSH: Enabled (root access)"
+    echo -e "  Application: $GITHUB_REPO"
     
-    prepare_disk
-    install_debian_base
-    install_packages
-    configure_kiosk_user
-    setup_kiosk_application
-    configure_boot
-    final_configuration
+    echo -e "\n${YELLOW}Next Steps:${NC}"
+    echo -e "  1. Remove installation media"
+    echo -e "  2. Reboot the system"
+    echo -e "  3. SSH into $HOSTNAME"
+    echo -e "  4. Run: ./phase2-harden.sh"
+    echo -e "  5. Then run: ./phase3-kiosk.sh"
     
-    echo
-    echo -e "${GREEN}KIOSKBOOK INSTALLATION COMPLETED!${NC}"
-    echo
-    echo "Installation Summary:"
-    echo "• OS: Debian Stable (minimal)"
-    echo "• Hostname: kioskbook"
-    echo "• Kiosk App: $GITHUB_REPO"
-    echo "• Boot: Fast (<10 seconds)"
-    echo "• Access: SSH enabled, Tailscale installed"
-    echo "• User: kiosk (auto-login)"
-    echo
-    echo "The system will reboot into your kiosk application."
-    echo "For remote access, run: tailscale up"
-    echo
-    echo "Rebooting in 10 seconds..."
-    sleep 10
+    echo -e "\n${BLUE}Rebooting in 10 seconds...${NC}"
+    for i in {10..1}; do
+        echo -n "$i "
+        sleep 1
+    done
+    
+    echo -e "\n${GREEN}Rebooting now!${NC}"
     reboot
 }
 
-# Run main function
+# Main execution
+main() {
+    show_banner
+    
+    # Verify running as root
+    if [ "$(id -u)" != "0" ]; then
+        log_error "This script must be run as root"
+    fi
+    
+    get_configuration
+    show_summary
+    verify_hardware
+    partition_disk
+    mount_filesystems
+    install_base_system
+    configure_system
+    install_essential_packages
+    configure_ssh
+    install_bootloader
+    prepare_next_phases
+    cleanup_and_finish
+    show_completion
+}
+
+# Run installation
 main "$@"

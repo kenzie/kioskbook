@@ -199,9 +199,11 @@ After=network.target
 
 [Service]
 Type=oneshot
+User=root
 ExecStart=/opt/auto-update.sh
 StandardOutput=journal
 StandardError=journal
+TimeoutStartSec=1800
 
 [Install]
 WantedBy=multi-user.target
@@ -210,9 +212,15 @@ EOF
     fi
     
     systemctl daemon-reload
-    systemctl enable auto-update.service
     
-    log_info "Auto-update service created"
+    # Validate the service file
+    if systemctl cat auto-update.service >/dev/null 2>&1; then
+        systemctl enable auto-update.service
+        log_info "Auto-update service created and enabled"
+    else
+        log_error "Auto-update service file is invalid"
+        systemctl cat auto-update.service
+    fi
 }
 
 # Create auto-update timer
@@ -235,10 +243,16 @@ WantedBy=timers.target
 EOF
     
     systemctl daemon-reload
-    systemctl enable auto-update.timer
-    systemctl start auto-update.timer
     
-    log_info "Auto-update timer created and started"
+    # Validate the timer file
+    if systemctl cat auto-update.timer >/dev/null 2>&1; then
+        systemctl enable auto-update.timer
+        systemctl start auto-update.timer
+        log_info "Auto-update timer created and started"
+    else
+        log_error "Auto-update timer file is invalid"
+        systemctl cat auto-update.timer
+    fi
 }
 
 # Setup update notification

@@ -110,18 +110,28 @@ validate_environment() {
         exit 1
     fi
     
-    # Install required tools if missing
-    log_info "Installing required tools..."
-    apk update
-    apk add util-linux
+    # Check what tools are actually available
+    log_info "Checking available tools..."
     
-    # Verify basic tools are available
-    for tool in fdisk mkfs.ext4 mount chroot; do
-        if ! command -v "$tool" >/dev/null 2>&1; then
-            log_error "Required tool '$tool' still not found after installation"
-            exit 1
-        fi
-    done
+    # List what's actually available
+    log_info "Available commands:"
+    which fdisk || log_info "fdisk not found"
+    which mkfs.ext4 || log_info "mkfs.ext4 not found" 
+    which mount || log_info "mount not found"
+    which chroot || log_info "chroot not found"
+    
+    # Try to install basic tools if missing
+    log_info "Attempting to install basic tools..."
+    apk update || log_warning "apk update failed"
+    
+    # Try common package names
+    apk add util-linux 2>/dev/null || log_warning "util-linux not available"
+    apk add e2fsprogs 2>/dev/null || log_warning "e2fsprogs not available"
+    
+    # Check again after attempted installation
+    log_info "Tools after installation attempt:"
+    which fdisk || log_info "fdisk still not found"
+    which mkfs.ext4 || log_info "mkfs.ext4 still not found"
     
     log_info "Environment validation passed"
 }

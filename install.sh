@@ -351,9 +351,9 @@ install_system() {
     # Setup apk with reliable mirror
     setup-apkcache /mnt/root/cache
     
-    # Configure reliable Alpine mirror
-    echo "https://dl-cdn.alpinelinux.org/alpine/v3.22/main" > /mnt/root/etc/apk/repositories
-    echo "https://dl-cdn.alpinelinux.org/alpine/v3.22/community" >> /mnt/root/etc/apk/repositories
+    # Configure University of Waterloo Alpine mirror
+    echo "https://mirror.csclub.uwaterloo.ca/alpine/v3.22/main" > /mnt/root/etc/apk/repositories
+    echo "https://mirror.csclub.uwaterloo.ca/alpine/v3.22/community" >> /mnt/root/etc/apk/repositories
     
     # Update package index with retry
     log_info "Updating package index..."

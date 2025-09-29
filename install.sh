@@ -37,7 +37,8 @@ log_warning() {
 
 # Show banner
 show_banner() {
-    clear
+    # clear command may not be available in minimal environment
+    printf "\033c" 2>/dev/null || true
     echo -e "${CYAN}"
     echo "┌─────────────────────────────────────┐"
     echo "│                                     │"
@@ -102,7 +103,7 @@ get_configuration() {
         log_info "Installation cancelled"
         exit 0
     fi
-    clear
+    printf "\033c" 2>/dev/null || true
     
     # Get GitHub repository
     echo -n -e "${CYAN}Kiosk application repository${NC} [kenzie/lobby-display]: "
@@ -119,7 +120,7 @@ get_configuration() {
     else
         GITHUB_URL="https://github.com/$GITHUB_REPO.git"
     fi
-    clear
+    printf "\033c" 2>/dev/null || true
     
     # Set root password
     echo -e "${CYAN}Set root password for remote access${NC}"
@@ -141,7 +142,7 @@ get_configuration() {
             log_error "Passwords do not match!"
         fi
     done
-    clear
+    printf "\033c" 2>/dev/null || true
     
     # Final confirmation
     echo -e "${CYAN}Installation Summary:${NC}"
@@ -153,7 +154,7 @@ get_configuration() {
     echo
     echo -n "Proceed with installation? (y/N): "
     read final_confirm
-    clear
+    printf "\033c" 2>/dev/null || true
     
     if [ "$final_confirm" != "y" ] && [ "$final_confirm" != "Y" ]; then
         log_info "Installation cancelled"

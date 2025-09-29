@@ -318,150 +318,40 @@ prepare_disk() {
     log_info "Disk preparation completed"
 }
 
-# Install basic system
-install_system() {
-    log_step "Installing Alpine Linux System"
+# Install minimal Alpine using setup-alpine
+install_minimal_alpine() {
+    log_step "Installing Minimal Alpine Linux"
     
-    # Unmount partitions before using setup-disk
-    log_info "Unmounting partitions for setup-disk..."
-    umount /mnt/root/boot 2>/dev/null || true
-    umount /mnt/root 2>/dev/null || true
-    umount /mnt/boot 2>/dev/null || true
+    # Use Alpine's setup-disk for a clean, working installation
+    log_info "Running setup-disk for target disk $DISK"
     
-    # Mount root partition
-    log_info "Mounting root partition..."
-    mount "$ROOT_PARTITION" /mnt/root
-    mount "$EFI_PARTITION" /mnt/boot
-    mount --bind /mnt/boot /mnt/root/boot
+    # Set up environment for automated installation
+    export BOOTLOADER="grub"
+    export USE_EFI="yes"
+    export DISKLABEL="gpt"
     
-    # Verify mount points
-    if ! mountpoint -q /mnt/root; then
-        log_error "/mnt/root is not properly mounted"
-        exit 1
-    fi
+    # Run setup-disk (Alpine's built-in installer)
+    echo -e "y\n" | setup-disk -m sys "$DISK"
     
-    # Install Alpine Linux base system manually
-    log_info "Installing Alpine Linux base system..."
+    # Mount the newly installed system
+    mount "${ROOT_PARTITION}" /mnt/root
+    mount "${EFI_PARTITION}" /mnt/root/boot
     
-    # Download and extract Alpine rootfs (use latest stable)
-    cd /tmp
-    # Try to download latest Alpine 3.22 rootfs, fallback to 3.21 if needed
-    if ! wget https://dl-cdn.alpinelinux.org/alpine/v3.22/releases/x86_64/alpine-minirootfs-3.22.1-x86_64.tar.gz; then
-        log_warning "Alpine 3.22.1 not found, trying 3.21.0"
-        wget https://dl-cdn.alpinelinux.org/alpine/v3.21/releases/x86_64/alpine-minirootfs-3.21.0-x86_64.tar.gz
-        tar -xzf alpine-minirootfs-3.21.0-x86_64.tar.gz -C /mnt/root
-    else
-        tar -xzf alpine-minirootfs-3.22.1-x86_64.tar.gz -C /mnt/root
-    fi
+    # Set root password
+    echo "root:$ROOT_PASSWORD" | chroot /mnt/root chpasswd
     
-    # Setup apk with local ISO packages first
-    setup-apkcache /mnt/root/cache
+    # Create kiosk user
+    chroot /mnt/root adduser -D -s /bin/sh kiosk
+    echo "kiosk:$ROOT_PASSWORD" | chroot /mnt/root chpasswd
+    chroot /mnt/root adduser kiosk wheel
     
-    # Use local packages from ISO if available
-    if [ -d "/media/cdrom/apks" ]; then
-        log_info "Using packages from ISO..."
-        echo "/media/cdrom/apks" > /mnt/root/etc/apk/repositories
-        chroot /mnt/root apk update
-        log_info "ISO packages loaded successfully"
-    else
-        log_warning "ISO packages not found, will try online mirrors"
-        
-        # Try different mirrors in order of preference (POSIX shell compatible)
-        for mirror in \
-            "https://mirror.csclub.uwaterloo.ca/alpine/v3.22" \
-            "https://dl-cdn.alpinelinux.org/alpine/v3.22" \
-            "https://mirror1.alpinelinux.org/alpine/v3.22" \
-            "https://mirrors.edge.kernel.org/alpine/v3.22"
-        do
-            log_info "Trying mirror: $mirror"
-            echo "$mirror/main" > /mnt/root/etc/apk/repositories
-            echo "$mirror/community" >> /mnt/root/etc/apk/repositories
-            
-            if chroot /mnt/root apk update 2>/dev/null; then
-                log_info "Successfully updated package index with $mirror"
-                break
-            else
-                log_warning "Failed to update with $mirror, trying next..."
-            fi
-        done
-    fi
+    # Set hostname
+    echo "kioskbook" > /mnt/root/etc/hostname
     
-    # Install core system packages (these should be on ISO)
-    log_info "Installing core system packages..."
-    chroot /mnt/root apk add \
-        linux-lts \
-        linux-firmware \
-        e2fsprogs \
-        util-linux \
-        coreutils \
-        openrc \
-        tzdata \
-        openssh \
-        sudo \
-        nano || log_error "Failed to install core packages"
+    # Enable SSH
+    chroot /mnt/root rc-update add sshd default
     
-    # Try to install additional packages (may not all be on ISO)
-    log_info "Installing additional packages..."
-    for package in curl wget git syslinux efibootmgr; do
-        if chroot /mnt/root apk add "$package" 2>/dev/null; then
-            log_info "Installed $package"
-        else
-            log_warning "$package not available"
-        fi
-    done
-    
-    # Install GUI packages if available
-    log_info "Installing GUI packages..."
-    for package in xorg-server xf86-video-fbdev xf86-video-vesa xf86-input-evdev xset; do
-        if chroot /mnt/root apk add "$package" 2>/dev/null; then
-            log_info "Installed $package"
-        else
-            log_warning "$package not available"
-        fi
-    done
-    
-    # Install development packages if available  
-    log_info "Installing development packages..."
-    for package in nodejs npm chromium; do
-        if chroot /mnt/root apk add "$package" 2>/dev/null; then
-            log_info "Installed $package"
-        else
-            log_warning "$package not available (will try online repositories later)"
-        fi
-    done
-    
-    # Install utilities if available
-    for package in htop bc jq imagemagick fbi; do
-        if chroot /mnt/root apk add "$package" 2>/dev/null; then
-            log_info "Installed $package"
-        else
-            log_warning "$package not available"
-        fi
-    done
-    
-    # Set up online repositories for missing packages
-    log_info "Setting up online repositories for missing packages..."
-    echo "https://dl-cdn.alpinelinux.org/alpine/v3.22/main" >> /mnt/root/etc/apk/repositories
-    echo "https://dl-cdn.alpinelinux.org/alpine/v3.22/community" >> /mnt/root/etc/apk/repositories
-    
-    # Update package index and install missing critical packages
-    if chroot /mnt/root apk update 2>/dev/null; then
-        log_info "Online repositories accessible, installing missing packages..."
-        for package in nodejs npm chromium; do
-            if ! chroot /mnt/root apk info -e "$package" >/dev/null 2>&1; then
-                chroot /mnt/root apk add "$package" 2>/dev/null || log_warning "Could not install $package from online repositories"
-            fi
-        done
-        
-        # Install Tailscale using official install script
-        log_info "Installing Tailscale using official script..."
-        chroot /mnt/root sh -c "curl -fsSL https://tailscale.com/install.sh | sh" || log_warning "Tailscale installation failed"
-    else
-        log_warning "Online repositories not accessible - some packages may be missing"
-        log_warning "You can install missing packages later when network is available"
-    fi
-    
-    log_info "System packages installed"
+    log_info "Minimal Alpine installation completed"
 }
 
 # Setup network
@@ -493,36 +383,173 @@ setup_fstab() {
     log_info "Filesystem table configured"
 }
 
-# Setup boot
+# Setup boot (simplified - use what's available on ISO)
 setup_boot() {
-    log_step "Setting Up Direct EFI Boot Configuration"
+    log_step "Setting Up Boot Configuration"
     
-    # Install bootloader packages
-    chroot /mnt/root apk add syslinux efibootmgr
+    # Check if we have a bootloader already installed by setup-alpine
+    if [ -f "/mnt/root/boot/vmlinuz-lts" ]; then
+        log_info "Bootloader already configured by setup-alpine"
+        return 0
+    fi
+    
+    # Simple EFI boot setup using available tools
+    log_info "Setting up minimal EFI boot..."
     
     # Create EFI directory structure
     mkdir -p /mnt/root/boot/EFI/BOOT
     
-    # Copy syslinux EFI bootloader
-    cp /mnt/root/usr/share/syslinux/efi64/syslinux.efi /mnt/root/boot/EFI/BOOT/BOOTX64.EFI
+    # Try to install bootloader if syslinux is available
+    if chroot /mnt/root which syslinux >/dev/null 2>&1; then
+        # Use syslinux if available
+        cp /mnt/root/usr/share/syslinux/efi64/syslinux.efi /mnt/root/boot/EFI/BOOT/BOOTX64.EFI 2>/dev/null || {
+            log_warning "Could not copy syslinux EFI bootloader"
+        }
+    else
+        log_warning "No bootloader available - system may not boot properly"
+        log_info "You may need to install a bootloader manually after the system boots"
+    fi
     
-    # Create syslinux configuration
-    mkdir -p /mnt/root/boot/syslinux
-    cat > /mnt/root/boot/syslinux/syslinux.cfg << EOF
+    # Create basic boot configuration if kernel exists
+    if [ -f "/mnt/root/boot/vmlinuz-lts" ]; then
+        mkdir -p /mnt/root/boot/syslinux
+        cat > /mnt/root/boot/syslinux/syslinux.cfg << EOF
 DEFAULT linux
 LABEL linux
   KERNEL /vmlinuz-lts
   APPEND initrd=/initramfs-lts root=$ROOT_PARTITION rw quiet
 EOF
+    fi
     
-    # Create EFI boot entry
-    chroot /mnt/root efibootmgr --create \
-        --disk "$DISK" \
-        --part 1 \
-        --label "KioskBook" \
-        --loader /EFI/BOOT/BOOTX64.EFI
+    log_info "Boot configuration completed (minimal)"
+}
+
+# Setup post-install script
+setup_post_install_script() {
+    log_step "Setting Up Post-Install Script"
     
-    log_info "Direct EFI boot configuration completed"
+    # Download and place post-install script
+    log_info "Creating post-install script..."
+    
+    cat > /mnt/root/root/post-install.sh << 'EOF'
+#!/bin/sh
+# KioskBook Post-Install Configuration
+# Run this after first boot to complete kiosk setup
+
+set -e
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+log_info() {
+    echo -e "${GREEN}[INFO]${NC} $1"
+}
+
+log_step() {
+    echo -e "${BLUE}[STEP]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+log_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+echo -e "${CYAN}KioskBook Post-Install Configuration${NC}"
+echo "===================================="
+echo
+
+# Update package repositories
+log_step "Updating package repositories"
+apk update
+
+# Install kiosk packages
+log_step "Installing kiosk packages"
+apk add nodejs npm chromium xorg-server xf86-video-fbdev xf86-input-evdev xset git curl wget
+
+# Install Tailscale
+log_step "Installing Tailscale"
+curl -fsSL https://tailscale.com/install.sh | sh
+rc-update add tailscaled default
+
+# Clone kiosk application
+log_step "Setting up kiosk application"
+mkdir -p /opt/kiosk-app
+cd /opt/kiosk-app
+
+# Get GitHub repo from install time (will be replaced)
+GITHUB_URL="GITHUB_URL_PLACEHOLDER"
+if [ "$GITHUB_URL" != "GITHUB_URL_PLACEHOLDER" ]; then
+    git clone "$GITHUB_URL" .
+    if [ -f package.json ]; then
+        npm install
+    fi
+fi
+
+# Create kiosk startup service
+cat > /etc/init.d/kiosk-app << 'EOFSERVICE'
+#!/sbin/openrc-run
+
+name="kiosk-app"
+description="KioskBook Application"
+command="/opt/kiosk-app/start.sh"
+command_user="kiosk"
+pidfile="/var/run/kiosk-app.pid"
+command_background="yes"
+
+depend() {
+    need net
+    after networking
+}
+EOFSERVICE
+
+chmod +x /etc/init.d/kiosk-app
+rc-update add kiosk-app default
+
+# Create startup script
+cat > /opt/kiosk-app/start.sh << 'EOFSTART'
+#!/bin/sh
+export DISPLAY=:0
+cd /opt/kiosk-app
+if [ -f package.json ]; then
+    npm start
+else
+    echo "No package.json found - manual configuration needed"
+fi
+EOFSTART
+
+chmod +x /opt/kiosk-app/start.sh
+chown -R kiosk:kiosk /opt/kiosk-app
+
+log_info "Post-install configuration completed!"
+log_info "System is ready for kiosk operation"
+EOF
+
+    chmod +x /mnt/root/root/post-install.sh
+    
+    # Replace GitHub URL placeholder
+    sed -i "s|GITHUB_URL_PLACEHOLDER|$GITHUB_URL|g" /mnt/root/root/post-install.sh
+    
+    # Create autorun script for first boot
+    cat > /mnt/root/etc/local.d/post-install.start << 'EOF'
+#!/bin/sh
+# Auto-run post-install script on first boot
+if [ -f /root/post-install.sh ] && [ ! -f /root/.post-install-complete ]; then
+    /root/post-install.sh
+    touch /root/.post-install-complete
+fi
+EOF
+    
+    chmod +x /mnt/root/etc/local.d/post-install.start
+    
+    log_info "Post-install script configured"
 }
 
 # Setup kiosk user
@@ -742,35 +769,26 @@ main() {
     log_step "Starting KioskBook Installation"
     
     prepare_disk
-    install_system
-    setup_network
-    setup_fstab
-    setup_boot
-    setup_kiosk_user
-    setup_kiosk_app
-    setup_watchdog
-    setup_auto_update
-    setup_screensaver
-    setup_kiosk_cli
-    setup_boot_logo
-    setup_tailscale
-    setup_services
+    install_minimal_alpine
+    setup_post_install_script
     
-    log_info "KioskBook installation completed successfully!"
+    log_info "KioskBook base installation completed successfully!"
     echo
-    echo -e "${GREEN}KIOSKBOOK INSTALLATION SUCCESSFUL!${NC}"
+    echo -e "${GREEN}KIOSKBOOK BASE INSTALLATION SUCCESSFUL!${NC}"
     echo
-    echo "Your kiosk is ready to use:"
+    echo "Base Alpine Linux system installed:"
     echo "- Hostname: kioskbook"
-    echo "- Kiosk App: $GITHUB_REPO"
-    echo "- Tailscale: Installed (Authenticate later via SSH)"
-    echo "- Watchdog: Enabled"
-    echo "- Auto-update: Enabled"
-    echo "- Screensaver: Enabled (11 PM - 7 AM)"
-    echo "- Management CLI: kiosk command"
+    echo "- Root and kiosk users created"
+    echo "- SSH enabled"
+    echo "- Post-install script ready"
     echo
-    echo "The system will reboot in 10 seconds..."
-    sleep 10
+    echo "The system will reboot and complete kiosk setup automatically."
+    echo "Kiosk app: $GITHUB_REPO"
+    echo
+    echo -e "${YELLOW}IMPORTANT: Remove the USB installer before reboot!${NC}"
+    echo
+    echo -n "Remove USB drive and press Enter to reboot..."
+    read
     reboot
 }
 

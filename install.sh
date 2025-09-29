@@ -195,8 +195,22 @@ clone_kioskbook() {
 
     # Make sure all scripts are executable
     find $KIOSKBOOK_DIR -name "*.sh" -exec chmod +x {} \;
+    
+    # Verify modules directory exists
+    if [ ! -d "$MODULES_DIR" ]; then
+        log_error "Modules directory not found at $MODULES_DIR - repository may be incomplete"
+    fi
+    
+    # Verify we have the expected modules
+    local expected_modules=("05-nodejs" "10-display-stack" "20-boot-optimization" "30-tailscale" "40-vue-app" "50-kiosk-services" "60-boot-splash" "70-health-monitoring" "80-auto-updates" "90-screensaver" "100-kiosk-cli" "110-finalization")
+    for module in "${expected_modules[@]}"; do
+        if [ ! -f "$MODULES_DIR/$module.sh" ]; then
+            log_error "Required module $module.sh not found in $MODULES_DIR"
+        fi
+    done
 
     log_info "KioskBook repository cloned to $KIOSKBOOK_DIR"
+    log_info "All modules verified and ready"
 }
 
 # Run installation modules in order
@@ -219,9 +233,16 @@ run_modules() {
         "110-finalization"
     )
 
+    # Debug information
+    log_info "Modules directory: $MODULES_DIR"
+    log_info "Available modules:"
+    ls -la "$MODULES_DIR"/*.sh 2>/dev/null || log_warn "No modules found in $MODULES_DIR"
+    
     # Run each module
     for module in "${MODULES[@]}"; do
         MODULE_SCRIPT="$MODULES_DIR/$module.sh"
+        log_info "Looking for module: $MODULE_SCRIPT"
+        
         if [ -f "$MODULE_SCRIPT" ]; then
             log_info "Running module: $module"
             # Pass arguments based on module needs
@@ -250,6 +271,8 @@ run_modules() {
             fi
         else
             log_error "Module $module not found at $MODULE_SCRIPT - installation incomplete"
+            log_error "Available files in $MODULES_DIR:"
+            ls -la "$MODULES_DIR" 2>/dev/null || log_error "Directory $MODULES_DIR does not exist"
         fi
     done
 

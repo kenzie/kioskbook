@@ -119,6 +119,7 @@ validate_environment() {
     which mkfs.ext4 || log_info "mkfs.ext4 not found" 
     which mount || log_info "mount not found"
     which chroot || log_info "chroot not found"
+    which lsblk || log_info "lsblk not found"
     
     # Try to install basic tools if missing
     log_info "Attempting to install basic tools..."
@@ -144,7 +145,7 @@ get_configuration() {
     
     # Auto-detect target disk
     echo -e "${CYAN}Available disks:${NC}"
-    lsblk -d -o NAME,SIZE,TYPE | grep disk
+    fdisk -l 2>/dev/null | grep "Disk /dev/" | grep -v "loop"
     echo
     
     # Auto-detect NVMe drive

@@ -46,9 +46,12 @@ Professional kiosk deployment platform for Alpine Linux. Deploy web applications
    - Ensure internet connectivity
    - Test with: `ping 8.8.8.8`
 
-3. **Run installer**
+3. **Install wget and download installer**
    ```bash
-   curl -sSL https://raw.githubusercontent.com/kenzie/kioskbook/main/install.sh | sh
+   apk add wget
+   wget https://raw.githubusercontent.com/kenzie/kioskbook/main/install.sh
+   chmod +x install.sh
+   sh install.sh
    ```
 
 4. **Follow prompts**
@@ -137,6 +140,13 @@ Tailscale is required for installation and provides:
 ## Troubleshooting
 
 ### Installation Issues
+
+**"curl: command not found" Error:**
+- Alpine Linux ISO doesn't include curl by default
+- Use wget instead: `apk add wget`
+- Download with: `wget https://raw.githubusercontent.com/kenzie/kioskbook/main/install.sh`
+- Make executable: `chmod +x install.sh`
+- Run with: `sh install.sh`
 
 **"Invalid disk" Error:**
 - Ensure disk is not mounted: `umount /dev/nvme0n1*` or `umount /dev/sda*`

@@ -188,61 +188,123 @@ brutal_disk_wipe() {
     log_info "Disk wipe completed - $DISK is now clean"
 }
 
-# Install Alpine using setup-alpine
+# Install Alpine manually (setup-alpine is unreliable)
 install_alpine() {
-    log_step "Installing Alpine Linux"
+    log_step "Installing Alpine Linux Manually"
     
-    # Let Alpine handle everything
-    log_info "Running Alpine's automated installation"
+    # Partition the disk
+    log_info "Creating partitions on $DISK"
+    (
+    echo g      # Create GPT partition table
+    echo n      # New partition
+    echo 1      # Partition 1
+    echo        # Default start
+    echo +512M  # 512MB for EFI
+    echo t      # Change type
+    echo 1      # EFI System
+    echo n      # New partition  
+    echo 2      # Partition 2
+    echo        # Default start
+    echo        # Default end (rest of disk)
+    echo w      # Write changes
+    ) | fdisk "$DISK"
     
-    # Set up answers for setup-alpine
-    export KEYMAPOPTS="us us"
-    export HOSTNAMEOPTS="-n kioskbook"
-    export INTERFACESOPTS="auto lo
-iface lo inet loopback
-
-auto eth0  
-iface eth0 inet dhcp"
-    export DNSOPTS="8.8.8.8 8.8.4.4"
-    export TIMEZONEOPTS="-z UTC"
-    export PROXYOPTS="none"
-    export APKREPOSOPTS="-r"
-    export USEROPTS="-a -u -g wheel kiosk"
-    export SSHDOPTS="-c openssh"
-    export NTPOPTS="-c chrony"
-    export DISKOPTS="-m sys $DISK"
+    # Wait for partition creation
+    sleep 2
+    partprobe "$DISK"
+    sleep 2
     
-    # Create answer file for completely automated installation
-    cat > /tmp/answers << EOF
-us
-us
-kioskbook
-eth0
-dhcp
-none
-8.8.8.8 8.8.4.4
-UTC
--r
-kiosk
-openssh
-chrony
-sys
-$DISK
-y
+    # Determine partition names
+    if echo "$DISK" | grep -q "nvme"; then
+        EFI_PARTITION="${DISK}p1"
+        ROOT_PARTITION="${DISK}p2"
+    else
+        EFI_PARTITION="${DISK}1"
+        ROOT_PARTITION="${DISK}2"
+    fi
+    
+    log_info "Created partitions: $EFI_PARTITION (EFI), $ROOT_PARTITION (root)"
+    
+    # Format partitions
+    log_info "Formatting partitions"
+    mkfs.fat -F32 "$EFI_PARTITION"
+    mkfs.ext4 -F "$ROOT_PARTITION"
+    
+    # Mount partitions for installation
+    log_info "Mounting partitions for installation"
+    mount "$ROOT_PARTITION" /mnt
+    mkdir -p /mnt/boot
+    mount "$EFI_PARTITION" /mnt/boot
+    
+    # Install Alpine base system
+    log_info "Installing Alpine base system"
+    apk add --root /mnt --initdb alpine-base alpine-conf
+    
+    # Copy basic system files
+    cp /etc/resolv.conf /mnt/etc/
+    
+    # Set up fstab
+    log_info "Creating filesystem table"
+    cat > /mnt/etc/fstab << EOF
+$ROOT_PARTITION / ext4 rw,relatime 0 1
+$EFI_PARTITION /boot vfat rw,relatime,fmask=0022,dmask=0022,codepage=437,iocharset=iso8859-1,shortname=mixed,errors=remount-ro 0 2
+tmpfs /tmp tmpfs nosuid,nodev,noexec 0 0
 EOF
     
-    # Run setup-alpine with answers
-    setup-alpine -f /tmp/answers
+    # Set hostname
+    echo "kioskbook" > /mnt/etc/hostname
     
-    log_info "Alpine Linux installation completed"
+    # Create network configuration
+    cat > /mnt/etc/network/interfaces << EOF
+auto lo
+iface lo inet loopback
+
+auto eth0
+iface eth0 inet dhcp
+EOF
+    
+    # Install and configure bootloader
+    log_info "Installing bootloader"
+    chroot /mnt apk add grub grub-efi efibootmgr
+    chroot /mnt grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=alpine
+    chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg
+    
+    # Install kernel
+    chroot /mnt apk add linux-lts
+    
+    # Enable essential services
+    chroot /mnt rc-update add devfs sysinit
+    chroot /mnt rc-update add dmesg sysinit
+    chroot /mnt rc-update add mdev sysinit
+    chroot /mnt rc-update add hwdrivers sysinit
+    chroot /mnt rc-update add hwclock boot
+    chroot /mnt rc-update add modules boot
+    chroot /mnt rc-update add sysctl boot
+    chroot /mnt rc-update add hostname boot
+    chroot /mnt rc-update add bootmisc boot
+    chroot /mnt rc-update add syslog boot
+    chroot /mnt rc-update add networking default
+    chroot /mnt rc-update add urandom default
+    chroot /mnt rc-update add acpid default
+    chroot /mnt rc-update add crond default
+    chroot /mnt rc-update add killprocs shutdown
+    chroot /mnt rc-update add mount-ro shutdown
+    chroot /mnt rc-update add savecache shutdown
+    
+    log_info "Alpine Linux base installation completed"
 }
 
 # Configure for phases 2-3 and fix what setup-alpine missed
 setup_phases() {
     log_step "Configuring Installed System"
     
-    # Mount the installed system  
-    mount "${DISK}p2" /mnt 2>/dev/null || mount "${DISK}2" /mnt
+    # System is already mounted at /mnt from installation
+    # Just make sure we have the partition variables set
+    if echo "$DISK" | grep -q "nvme"; then
+        ROOT_PARTITION="${DISK}p2"
+    else
+        ROOT_PARTITION="${DISK}2"
+    fi
     
     # Set root password properly (setup-alpine often fails at this)
     log_info "Setting root password on installed system..."

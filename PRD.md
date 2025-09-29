@@ -14,8 +14,8 @@ KioskBook is a bulletproof kiosk deployment platform designed for unattended ope
 
 ## Software Stack
 
-- **Base OS**: Alpine Linux 3.22.1
-- **Bootloader**: GRUB (EFI)
+- **Base OS**: Debian Stable (minimal installation)
+- **Bootloader**: systemd-boot (minimal, no boot menu)
 - **Display Server**: X11 (minimal, no desktop environment)
 - **Browser**: Chromium (kiosk mode)
 - **Runtime**: Node.js + npm
@@ -27,99 +27,56 @@ KioskBook is a bulletproof kiosk deployment platform designed for unattended ope
 - **Boot Time**: <10 seconds from power on to application display
 - **Recovery Time**: <30 seconds for automatic service recovery
 - **Uptime**: Designed for months of unattended operation
-- **Resource Usage**: Minimal Alpine footprint + application requirements
+- **Offline Operation**: Must work without network using cached JSON data
+- **Resource Usage**: Minimal Debian footprint + application requirements
 
-## Three-Phase Architecture
+## Single-Script Installation Architecture
 
-### Phase 1: Brutal Alpine Installation (`install.sh`)
+### One-Shot Installation (`install.sh`)
 
-**Purpose**: Establish a clean, bootable Alpine Linux system
+**Purpose**: Complete kiosk installation from bare metal to running kiosk in one script execution
 
 **Features:**
-- Brutal disk wiping (user confirms with "DESTROY")
-- Automated Alpine Linux installation using `setup-alpine`
-- SSH access configuration with user-defined root password
-- NVMe drive auto-detection (`/dev/nvme0n1`)
-- Network connectivity validation
-- Phase 2/3 script preparation
+- Simple y/N disk wiping confirmation
+- Minimal Debian base system installation
+- Automatic package installation (X11, Chromium, Node.js)
+- Kiosk user creation and auto-login configuration
+- Application repository cloning and setup
+- Bootloader configuration (minimal, no boot menu)
+- SSH and Tailscale setup for remote access
+- Offline operation with cached JSON data support
+- Complete system optimization for fast boot (network-independent)
+- Automatic reboot into live kiosk
+
+**Installation Process:**
+1. **Disk Preparation**: Wipe and partition NVMe drive
+2. **Base System**: Install minimal Debian with essential packages
+3. **Kiosk Packages**: Install X11, Chromium, Node.js, development tools
+4. **User Setup**: Create kiosk user with auto-login
+5. **Application Setup**: Clone repository, install dependencies, configure startup
+6. **Boot Configuration**: Install minimal bootloader, optimize boot sequence
+7. **Remote Access**: Configure SSH and install Tailscale
+8. **Final Configuration**: Set hostname, optimize services, configure auto-start
+9. **Reboot**: Automatic reboot into functioning kiosk
 
 **Inputs:**
-- GitHub repository for kiosk application
+- GitHub repository for kiosk application (defaults to kenzie/lobby-display)
 - Root password for remote access
-- User confirmation for data destruction
+- Simple y/N confirmation for data destruction
 
 **Outputs:**
-- Bootable Alpine Linux system
-- SSH enabled for remote access
-- Hostname set to "kioskbook"
-- Phase 2 and 3 scripts ready for execution
+- Fully functional kiosk system
+- <10 second boot time to application
+- Remote SSH and Tailscale access configured
+- Automatic application startup
+- Minimal bootloader (no visible boot menu)
 
 **Success Criteria:**
-- System boots from NVMe drive
-- SSH access works with configured password
-- Alpine package manager functional
-- Phase scripts present in `/root/`
-
-### Phase 2: System Hardening (`phase2-harden.sh`)
-
-**Purpose**: Configure system for bulletproof unattended operation
-
-**Features:**
-- Automatic system updates configuration
-- Tailscale VPN installation and configuration
-- Log rotation and system monitoring setup
-- Service auto-recovery mechanisms
-- Basic firewall configuration
-- System health monitoring
-- Remote access optimization
-
-**Components:**
-- **Update Management**: Automatic security updates
-- **VPN Access**: Tailscale for secure remote management
-- **Monitoring**: System health checks and logging
-- **Recovery**: Automatic service restart on failure
-- **Security**: Minimal attack surface configuration
-
-**Success Criteria:**
-- System automatically updates security patches
-- Tailscale VPN accessible for remote management
-- Services automatically restart on failure
-- Comprehensive logging for troubleshooting
-- System survives common failure scenarios
-
-### Phase 3: Fast Kiosk Setup (`phase3-kiosk.sh`)
-
-**Purpose**: Configure ultra-fast kiosk application environment
-
-**Features:**
-- Minimal X11 server installation
-- Chromium browser in kiosk mode
-- Node.js and npm installation
-- Vue.js application deployment
-- Auto-start configuration
-- Boot time optimization
-- Display and power management
-
-**Boot Optimization:**
-- Parallel service initialization
-- Minimal service set
-- Optimized kernel parameters
-- Fast filesystem options
-- Preloaded application assets
-
-**Application Management:**
-- Git clone of specified repository
-- Automatic npm install and build
-- Application health monitoring
-- Auto-restart on application crashes
-- Update mechanism for application code
-
-**Success Criteria:**
-- <10 second boot time to application display
-- Application starts automatically on boot
-- Full-screen kiosk mode operation
-- Automatic recovery from application failures
-- Application updates work reliably
+- Single script execution completes without intervention
+- System boots directly into kiosk application
+- Remote access available immediately
+- Application loads and displays correctly
+- Boot time under 10 seconds consistently
 
 ## Security Model
 
@@ -149,32 +106,26 @@ KioskBook is a bulletproof kiosk deployment platform designed for unattended ope
 ## Deployment Process
 
 1. **Preparation**:
-   - Boot Lenovo M75q-1 from Alpine 3.22.1 USB
+   - Boot Lenovo M75q-1 from Debian netinst USB
    - Ensure ethernet connectivity
    - Download installation script
 
-2. **Phase 1 - Installation**:
+2. **One-Shot Installation**:
    ```bash
    wget https://raw.githubusercontent.com/kenzie/kioskbook/main/install.sh
    chmod +x install.sh
    ./install.sh
    ```
+   - Script handles entire installation automatically
+   - Prompts for repository URL and passwords only
+   - Completes with automatic reboot into live kiosk
 
-3. **Phase 2 - Hardening** (post-reboot):
-   ```bash
-   ./phase2-harden.sh
-   ```
-
-4. **Phase 3 - Kiosk Setup**:
-   ```bash
-   ./phase3-kiosk.sh
-   ```
-
-5. **Validation**:
-   - Verify <10 second boot time
-   - Confirm application loads and displays correctly
-   - Test remote SSH access
-   - Verify automatic recovery mechanisms
+3. **Validation**:
+   - System boots directly into kiosk application
+   - Verify <10 second boot time achieved
+   - Confirm application displays correctly in full-screen
+   - Test remote SSH access works
+   - Verify Tailscale VPN connectivity
 
 ## Maintenance and Operations
 

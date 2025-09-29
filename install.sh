@@ -1,9 +1,8 @@
-#!/bin/sh
-# KioskBook Phase 1: Brutal Alpine Installation
-# Lenovo M75q-1 + Alpine Linux 3.22.1 USB ISO
-# Goal: Fast, reliable Alpine installation that boots
+#!/bin/bash
+# KioskBook One-Shot Debian Installer
+# Complete kiosk installation from bare metal to running kiosk
 
-set -ex  # Enable both error exit and command tracing
+set -e
 
 # Colors
 RED='\033[0;31m'
@@ -12,6 +11,12 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
+
+# Global variables
+DISK="/dev/nvme0n1"
+GITHUB_REPO=""
+GITHUB_URL=""
+ROOT_PASSWORD=""
 
 # Logging functions
 log_info() {
@@ -36,12 +41,12 @@ show_banner() {
     echo -e "${CYAN}"
     echo "┌─────────────────────────────────────┐"
     echo "│                                     │"
-    echo "│        KioskBook Phase 1            │"
-    echo "│     Brutal Alpine Installation      │"
+    echo "│          KioskBook Installer        │"
+    echo "│       One-Shot Debian Kiosk        │"
     echo "│                                     │"
     echo "└─────────────────────────────────────┘"
     echo -e "${NC}"
-    echo -e "${CYAN}Lenovo M75q-1 + Alpine Linux 3.22.1${NC}"
+    echo -e "${CYAN}Lenovo M75q-1 + Debian Stable${NC}"
     echo
 }
 
@@ -55,9 +60,10 @@ validate_environment() {
         exit 1
     fi
     
-    # Check if running on Alpine Linux
-    if ! [ -f /etc/alpine-release ] && ! command -v apk >/dev/null 2>&1; then
-        log_error "This installer requires Alpine Linux ISO"
+    # Check for NVMe drive
+    if [ ! -b "$DISK" ]; then
+        log_error "NVMe drive $DISK not found"
+        log_error "This installer is designed for Lenovo M75q-1"
         exit 1
     fi
     
@@ -67,52 +73,44 @@ validate_environment() {
         exit 1
     fi
     
-    # Auto-detect NVMe drive
-    if [ -b "/dev/nvme0n1" ]; then
-        DISK="/dev/nvme0n1"
-        log_info "Detected NVMe drive: $DISK"
-    else
-        log_error "No NVMe drive found at /dev/nvme0n1"
-        log_error "This installer is designed for Lenovo M75q-1"
-        exit 1
-    fi
+    # Check for required tools
+    for tool in debootstrap parted mkfs.ext4 mkfs.fat; do
+        if ! command -v "$tool" >/dev/null 2>&1; then
+            log_error "Required tool '$tool' not found"
+            log_error "Please run from Debian Live ISO with network access"
+            exit 1
+        fi
+    done
     
     log_info "Environment validation passed"
 }
 
-# Get configuration
+# Get configuration from user
 get_configuration() {
     echo -e "${CYAN}KioskBook Configuration${NC}"
-    echo "=========================="
+    echo "======================="
     echo
     
-    # Show what will happen
-    echo -e "${YELLOW}WARNING: BRUTAL INSTALLATION${NC}"
-    echo "This will:"
-    echo "• COMPLETELY ERASE $DISK"
-    echo "• DESTROY ALL DATA on the NVMe drive"
-    echo "• Install Alpine Linux from scratch"
-    echo "• Configure for kiosk operation"
+    # Disk warning
+    echo -e "${YELLOW}WARNING: This will completely erase $DISK${NC}"
+    echo -e "${RED}All data on this NVMe drive will be permanently lost!${NC}"
     echo
-    
-    # Confirm destruction
-    echo -e "${RED}ALL DATA WILL BE PERMANENTLY LOST!${NC}"
-    echo -n -e "${CYAN}Type 'DESTROY' to continue${NC}: "
+    echo -n -e "${CYAN}Continue? (y/N)${NC}: "
     read confirm
     
-    if [ "$confirm" != "DESTROY" ]; then
-        log_info "Installation cancelled - nothing was changed"
+    if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+        log_info "Installation cancelled"
         exit 0
     fi
     clear
     
     # Get GitHub repository
-    echo -n -e "${CYAN}Kiosk display git repo${NC} [kenzie/lobby-display]: "
+    echo -n -e "${CYAN}Kiosk application repository${NC} [kenzie/lobby-display]: "
     read GITHUB_REPO
-    clear
     
     if [ -z "$GITHUB_REPO" ]; then
         GITHUB_REPO="kenzie/lobby-display"
+        log_info "Using default repository: $GITHUB_REPO"
     fi
     
     # Convert to GitHub URL
@@ -121,34 +119,39 @@ get_configuration() {
     else
         GITHUB_URL="https://github.com/$GITHUB_REPO.git"
     fi
+    clear
     
     # Set root password
     echo -e "${CYAN}Set root password for remote access${NC}"
-    echo -n "Enter root password: "
-    read -s ROOT_PASSWORD
-    echo
-    echo -n "Confirm root password: "
-    read -s ROOT_PASSWORD_CONFIRM
-    echo
+    while true; do
+        echo -n "Enter root password: "
+        read -s ROOT_PASSWORD
+        echo
+        echo -n "Confirm root password: "
+        read -s ROOT_PASSWORD_CONFIRM
+        echo
+        
+        if [ "$ROOT_PASSWORD" = "$ROOT_PASSWORD_CONFIRM" ]; then
+            if [ -n "$ROOT_PASSWORD" ]; then
+                break
+            else
+                log_error "Password cannot be empty!"
+            fi
+        else
+            log_error "Passwords do not match!"
+        fi
+    done
     clear
-    
-    if [ "$ROOT_PASSWORD" != "$ROOT_PASSWORD_CONFIRM" ]; then
-        log_error "Passwords do not match!"
-        exit 1
-    fi
-    
-    if [ -z "$ROOT_PASSWORD" ]; then
-        log_error "Root password cannot be empty!"
-        exit 1
-    fi
     
     # Final confirmation
     echo -e "${CYAN}Installation Summary:${NC}"
-    echo "Target: $DISK (NVMe drive will be erased)"
+    echo "Target: $DISK (will be erased)"
     echo "Kiosk App: $GITHUB_REPO"
-    echo "System: Alpine Linux with SSH enabled"
+    echo "OS: Debian Stable (minimal)"
+    echo "Boot: Fast, no boot menu"
+    echo "Features: SSH, Tailscale, offline operation"
     echo
-    echo -n "Proceed with BRUTAL installation? (y/N): "
+    echo -n "Proceed with installation? (y/N): "
     read final_confirm
     clear
     
@@ -158,135 +161,80 @@ get_configuration() {
     fi
 }
 
-# Brutal disk preparation  
-brutal_disk_wipe() {
-    log_step "BRUTAL DISK WIPE: $DISK"
+# Prepare disk with partitions
+prepare_disk() {
+    log_step "Preparing Disk: $DISK"
     
-    # Temporarily disable error exit for cleanup commands
-    set +e
+    # Unmount any existing mounts
+    log_info "Unmounting any existing partitions"
+    for partition in $(lsblk -ln -o NAME "$DISK" | tail -n +2); do
+        umount "/dev/$partition" 2>/dev/null || true
+    done
     
-    # Kill any processes using the disk
-    log_info "Stopping any processes using $DISK"
-    # fuser might not be available, so use alternative approach
-    if command -v fuser >/dev/null 2>&1; then
-        log_info "Found fuser command, attempting to kill processes"
-        fuser -km "$DISK"* 2>/dev/null
-        log_info "fuser command completed"
-    else
-        log_warning "fuser command not available, skipping process termination"
-    fi
+    # Wipe disk
+    log_info "Wiping disk and partition table"
+    wipefs -af "$DISK"
+    dd if=/dev/zero of="$DISK" bs=1M count=100 status=none
     
-    log_info "DEBUG: Past fuser command, continuing with unmount"
+    # Create GPT partition table
+    log_info "Creating partition table"
+    parted "$DISK" --script mklabel gpt
     
-    # Unmount everything
-    log_info "Unmounting all partitions on $DISK"
-    # More robust partition detection
-    if ls "${DISK}"* >/dev/null 2>&1; then
-        for partition in $(ls ${DISK}* 2>/dev/null || true); do
-            if [ "$partition" != "$DISK" ]; then
-                log_info "Unmounting $partition"
-                umount "$partition" 2>/dev/null || true
-            fi
-        done
-    else
-        log_info "No existing partitions found on $DISK"
-    fi
+    # Create EFI partition (512MB)
+    log_info "Creating EFI partition (512MB)"
+    parted "$DISK" --script mkpart primary fat32 1MiB 513MiB
+    parted "$DISK" --script set 1 esp on
     
-    # Wait for unmounts
-    sleep 2
-    
-    # Wipe partition table and first few MB
-    log_info "Wiping partition table and boot sectors"
-    dd if=/dev/zero of="$DISK" bs=1M count=100 2>/dev/null || true
-    
-    # Clear any remaining filesystem signatures
-    if command -v wipefs >/dev/null 2>&1; then
-        wipefs -af "$DISK" 2>/dev/null || true
-    else
-        log_warning "wipefs not available, skipping filesystem signature clearing"
-    fi
-    
-    # Force kernel to re-read partition table
-    if command -v partprobe >/dev/null 2>&1; then
-        partprobe "$DISK" 2>/dev/null || true
-    else
-        log_warning "partprobe not available, using blockdev instead"
-        blockdev --rereadpt "$DISK" 2>/dev/null || true
-    fi
-    
-    # Re-enable error exit
-    set -e
-    
-    log_info "Disk wipe completed - $DISK is now clean"
-}
-
-# Install Alpine manually (setup-alpine is unreliable)
-install_alpine() {
-    log_step "Installing Alpine Linux Manually"
-    
-    # Partition the disk
-    log_info "Creating partitions on $DISK"
-    (
-    echo g      # Create GPT partition table
-    echo n      # New partition
-    echo 1      # Partition 1
-    echo        # Default start
-    echo +512M  # 512MB for EFI
-    echo t      # Change type
-    echo 1      # EFI System
-    echo n      # New partition  
-    echo 2      # Partition 2
-    echo        # Default start
-    echo        # Default end (rest of disk)
-    echo w      # Write changes
-    ) | fdisk "$DISK"
+    # Create root partition (remaining space)
+    log_info "Creating root partition (remaining space)"
+    parted "$DISK" --script mkpart primary ext4 513MiB 100%
     
     # Wait for partition creation
     sleep 2
     partprobe "$DISK"
     sleep 2
     
-    # Determine partition names
-    if echo "$DISK" | grep -q "nvme"; then
-        EFI_PARTITION="${DISK}p1"
-        ROOT_PARTITION="${DISK}p2"
-    else
-        EFI_PARTITION="${DISK}1"
-        ROOT_PARTITION="${DISK}2"
-    fi
-    
-    log_info "Created partitions: $EFI_PARTITION (EFI), $ROOT_PARTITION (root)"
-    
     # Format partitions
     log_info "Formatting partitions"
-    mkfs.fat -F32 "$EFI_PARTITION"
-    mkfs.ext4 -F "$ROOT_PARTITION"
+    mkfs.fat -F32 "${DISK}p1"
+    mkfs.ext4 -F "${DISK}p2"
     
-    # Mount partitions for installation
-    log_info "Mounting partitions for installation"
-    mount "$ROOT_PARTITION" /mnt
-    mkdir -p /mnt/boot
-    mount "$EFI_PARTITION" /mnt/boot
+    log_info "Disk preparation completed"
+}
+
+# Install minimal Debian base system
+install_debian_base() {
+    log_step "Installing Debian Base System"
     
-    # Install Alpine base system
-    log_info "Installing Alpine base system"
-    apk add --root /mnt --initdb alpine-base alpine-conf
+    # Mount root partition
+    log_info "Mounting target filesystem"
+    mount "${DISK}p2" /mnt
     
-    # Copy basic system files
-    cp /etc/resolv.conf /mnt/etc/
+    # Install Debian base system using debootstrap
+    log_info "Installing Debian base system (this may take several minutes)"
+    debootstrap --arch=amd64 --variant=minbase stable /mnt http://deb.debian.org/debian
     
-    # Set up fstab
-    log_info "Creating filesystem table"
-    cat > /mnt/etc/fstab << EOF
-$ROOT_PARTITION / ext4 rw,relatime 0 1
-$EFI_PARTITION /boot vfat rw,relatime,fmask=0022,dmask=0022,codepage=437,iocharset=iso8859-1,shortname=mixed,errors=remount-ro 0 2
-tmpfs /tmp tmpfs nosuid,nodev,noexec 0 0
-EOF
+    # Mount special filesystems
+    log_info "Setting up chroot environment"
+    mount "${DISK}p1" /mnt/boot
+    mount --bind /dev /mnt/dev
+    mount --bind /proc /mnt/proc
+    mount --bind /sys /mnt/sys
+    
+    # Configure basic system files
+    log_info "Configuring base system"
     
     # Set hostname
     echo "kioskbook" > /mnt/etc/hostname
     
-    # Create network configuration
+    # Configure hosts
+    cat > /mnt/etc/hosts << EOF
+127.0.0.1   localhost
+127.0.1.1   kioskbook
+::1         localhost ip6-localhost ip6-loopback
+EOF
+    
+    # Configure network
     cat > /mnt/etc/network/interfaces << EOF
 auto lo
 iface lo inet loopback
@@ -295,167 +243,272 @@ auto eth0
 iface eth0 inet dhcp
 EOF
     
-    # Install and configure bootloader
-    log_info "Installing bootloader"
-    chroot /mnt apk add grub grub-efi efibootmgr
-    chroot /mnt grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=alpine
-    chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg
+    # Configure fstab
+    ROOT_UUID=$(blkid -s UUID -o value "${DISK}p2")
+    EFI_UUID=$(blkid -s UUID -o value "${DISK}p1")
     
-    # Install kernel
-    chroot /mnt apk add linux-lts
+    cat > /mnt/etc/fstab << EOF
+UUID=$ROOT_UUID / ext4 defaults 0 1
+UUID=$EFI_UUID /boot vfat defaults 0 2
+tmpfs /tmp tmpfs defaults,nodev,nosuid,noexec 0 0
+EOF
     
-    # Enable essential services
-    chroot /mnt rc-update add devfs sysinit
-    chroot /mnt rc-update add dmesg sysinit
-    chroot /mnt rc-update add mdev sysinit
-    chroot /mnt rc-update add hwdrivers sysinit
-    chroot /mnt rc-update add hwclock boot
-    chroot /mnt rc-update add modules boot
-    chroot /mnt rc-update add sysctl boot
-    chroot /mnt rc-update add hostname boot
-    chroot /mnt rc-update add bootmisc boot
-    chroot /mnt rc-update add syslog boot
-    chroot /mnt rc-update add networking default
-    chroot /mnt rc-update add urandom default
-    chroot /mnt rc-update add acpid default
-    chroot /mnt rc-update add crond default
-    chroot /mnt rc-update add killprocs shutdown
-    chroot /mnt rc-update add mount-ro shutdown
-    chroot /mnt rc-update add savecache shutdown
-    
-    log_info "Alpine Linux base installation completed"
+    log_info "Debian base system installed"
 }
 
-# Configure for phases 2-3 and fix what setup-alpine missed
-setup_phases() {
-    log_step "Configuring Installed System"
+# Install and configure packages
+install_packages() {
+    log_step "Installing Kiosk Packages"
     
-    # System is already mounted at /mnt from installation
-    # Just make sure we have the partition variables set
-    if echo "$DISK" | grep -q "nvme"; then
-        ROOT_PARTITION="${DISK}p2"
-    else
-        ROOT_PARTITION="${DISK}2"
-    fi
+    # Copy DNS configuration
+    cp /etc/resolv.conf /mnt/etc/resolv.conf
     
-    # Set root password properly (setup-alpine often fails at this)
-    log_info "Setting root password on installed system..."
+    # Update package list
+    log_info "Updating package repositories"
+    chroot /mnt apt-get update
+    
+    # Install essential packages
+    log_info "Installing essential packages"
+    DEBIAN_FRONTEND=noninteractive chroot /mnt apt-get install -y \
+        systemd-boot \
+        linux-image-amd64 \
+        firmware-linux \
+        openssh-server \
+        sudo \
+        curl \
+        wget \
+        git \
+        ca-certificates \
+        apt-transport-https \
+        gnupg \
+        lsb-release
+    
+    # Install X11 and desktop packages
+    log_info "Installing X11 and display packages"
+    DEBIAN_FRONTEND=noninteractive chroot /mnt apt-get install -y \
+        xorg \
+        xserver-xorg-video-intel \
+        xserver-xorg-video-amdgpu \
+        chromium \
+        openbox \
+        lightdm \
+        plymouth \
+        plymouth-themes
+    
+    # Install Node.js
+    log_info "Installing Node.js"
+    chroot /mnt curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
+    DEBIAN_FRONTEND=noninteractive chroot /mnt apt-get install -y nodejs
+    
+    # Install Tailscale
+    log_info "Installing Tailscale"
+    chroot /mnt curl -fsSL https://tailscale.com/install.sh | sh
+    
+    # Clean up
+    chroot /mnt apt-get clean
+    
+    log_info "Package installation completed"
+}
+
+# Configure kiosk user and auto-login
+configure_kiosk_user() {
+    log_step "Configuring Kiosk User"
+    
+    # Set root password
+    log_info "Setting root password"
     echo "root:$ROOT_PASSWORD" | chroot /mnt chpasswd
     
-    # Ensure SSH is enabled (setup-alpine often misses this too)
-    log_info "Enabling SSH service..."
-    chroot /mnt rc-update add sshd default
+    # Create kiosk user
+    log_info "Creating kiosk user"
+    chroot /mnt useradd -m -s /bin/bash -G sudo,video,audio kiosk
+    echo "kiosk:kiosk123" | chroot /mnt chpasswd
     
-    # Enable networking service
-    chroot /mnt rc-update add networking default
-    
-    # Create phase 2 script (system hardening)
-    cat > /mnt/root/phase2-harden.sh << 'EOF'
-#!/bin/sh
-# Phase 2: System Hardening
-echo "Phase 2: System Hardening - Coming soon"
-# TODO: Implement system hardening
+    # Configure auto-login
+    log_info "Configuring auto-login"
+    cat > /mnt/etc/lightdm/lightdm.conf << EOF
+[Seat:*]
+autologin-user=kiosk
+autologin-user-timeout=0
+user-session=openbox
 EOF
-    chmod +x /mnt/root/phase2-harden.sh
     
-    # Create phase 3 script (kiosk setup)
-    cat > /mnt/root/phase3-kiosk.sh << 'EOFKIOSK'
-#!/bin/sh
-# Phase 3: Fast Kiosk Setup
-echo "Phase 3: Fast Kiosk Setup - Coming soon"
-# TODO: Implement fast X11 + Chromium + Vue.js setup
-EOFKIOSK
-    chmod +x /mnt/root/phase3-kiosk.sh
+    # Enable lightdm
+    chroot /mnt systemctl enable lightdm
     
-    # Store GitHub URL for phase 3
-    echo "$GITHUB_URL" > /mnt/root/.kioskbook-repo
-    
-    # Create post-boot configuration script that runs once
-    cat > /mnt/etc/local.d/kioskbook-postinstall.start << 'EOFPOST'
-#!/bin/sh
-# KioskBook post-install configuration
-# This runs once after first boot to verify everything is working
+    log_info "Kiosk user configuration completed"
+}
 
-# Ensure SSH is running
-if ! rc-service sshd status >/dev/null 2>&1; then
-    rc-service sshd start
+# Setup kiosk application
+setup_kiosk_application() {
+    log_step "Setting Up Kiosk Application"
+    
+    # Create application directory
+    log_info "Creating application directory"
+    mkdir -p /mnt/home/kiosk/kiosk-app
+    
+    # Clone repository
+    log_info "Cloning application repository: $GITHUB_URL"
+    chroot /mnt git clone "$GITHUB_URL" /home/kiosk/kiosk-app
+    chroot /mnt chown -R kiosk:kiosk /home/kiosk/kiosk-app
+    
+    # Install application dependencies
+    if [ -f "/mnt/home/kiosk/kiosk-app/package.json" ]; then
+        log_info "Installing application dependencies"
+        chroot /mnt sudo -u kiosk sh -c "cd /home/kiosk/kiosk-app && npm install"
+        
+        # Build if needed
+        if chroot /mnt sudo -u kiosk sh -c "cd /home/kiosk/kiosk-app && npm run --silent 2>/dev/null" | grep -q "build"; then
+            log_info "Building application"
+            chroot /mnt sudo -u kiosk sh -c "cd /home/kiosk/kiosk-app && npm run build"
+        fi
+    fi
+    
+    # Create kiosk startup script
+    log_info "Creating kiosk startup configuration"
+    cat > /mnt/home/kiosk/.config/openbox/autostart << 'EOF'
+#!/bin/bash
+
+# Disable screensaver and power management
+xset s off
+xset -dpms
+xset s noblank
+
+# Set background
+hsetroot -solid "#000000" &
+
+# Start application server
+cd /home/kiosk/kiosk-app
+if [ -f package.json ] && npm run --silent 2>/dev/null | grep -q "start"; then
+    npm start &
+    sleep 5
 fi
 
-# Display system info
-echo "=========================================="
-echo "KioskBook Phase 1 Installation Complete"
-echo "=========================================="
-echo "Hostname: $(hostname)"
-echo "IP Address: $(ip addr show eth0 | grep 'inet ' | awk '{print $2}' | cut -d/ -f1)"
-echo "SSH Status: $(rc-service sshd status 2>/dev/null | head -1)"
-echo ""
-echo "Ready for Phase 2 & 3:"
-echo "  /root/phase2-harden.sh"
-echo "  /root/phase3-kiosk.sh"
-echo ""
-echo "Repository: $(cat /root/.kioskbook-repo)"
-echo "=========================================="
+# Start Chromium in kiosk mode
+chromium \
+    --kiosk \
+    --no-sandbox \
+    --disable-dev-shm-usage \
+    --disable-gpu \
+    --disable-extensions \
+    --disable-plugins \
+    --disable-translate \
+    --disable-background-timer-throttling \
+    --disable-backgrounding-occluded-windows \
+    --disable-renderer-backgrounding \
+    --start-fullscreen \
+    --window-size=1920,1080 \
+    --app=http://localhost:3000
+EOF
+    
+    mkdir -p /mnt/home/kiosk/.config/openbox
+    chroot /mnt chown -R kiosk:kiosk /home/kiosk/.config
+    chmod +x /mnt/home/kiosk/.config/openbox/autostart
+    
+    log_info "Kiosk application setup completed"
+}
 
-# Mark as completed so this doesn't run again
-touch /root/.kioskbook-phase1-complete
-EOFPOST
+# Configure fast boot
+configure_boot() {
+    log_step "Configuring Fast Boot"
     
-    chmod +x /mnt/etc/local.d/kioskbook-postinstall.start
+    # Install systemd-boot
+    log_info "Installing systemd-boot bootloader"
+    chroot /mnt bootctl install
     
-    # Enable local service to run our post-install script
-    chroot /mnt rc-update add local default
+    # Configure systemd-boot
+    cat > /mnt/boot/loader/loader.conf << EOF
+default debian
+timeout 0
+console-mode max
+editor no
+EOF
     
-    # Unmount
+    # Create boot entry
+    KERNEL_VERSION=$(chroot /mnt ls /boot | grep vmlinuz | head -1 | sed 's/vmlinuz-//')
+    ROOT_UUID=$(blkid -s UUID -o value "${DISK}p2")
+    
+    cat > /mnt/boot/loader/entries/debian.conf << EOF
+title Debian
+linux /vmlinuz-$KERNEL_VERSION
+initrd /initrd.img-$KERNEL_VERSION
+options root=UUID=$ROOT_UUID rw quiet splash plymouth.ignore-serial-consoles
+EOF
+    
+    # Configure Plymouth for minimal boot splash
+    log_info "Configuring minimal boot splash"
+    chroot /mnt plymouth-set-default-theme spinner
+    chroot /mnt update-initramfs -u
+    
+    # Optimize boot services
+    log_info "Optimizing boot services"
+    chroot /mnt systemctl disable apt-daily.timer
+    chroot /mnt systemctl disable apt-daily-upgrade.timer
+    chroot /mnt systemctl disable man-db.timer
+    chroot /mnt systemctl enable ssh
+    
+    log_info "Boot configuration completed"
+}
+
+# Final system configuration
+final_configuration() {
+    log_step "Final System Configuration"
+    
+    # Configure SSH
+    log_info "Configuring SSH access"
+    sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /mnt/etc/ssh/sshd_config
+    
+    # Set timezone
+    chroot /mnt timedatectl set-timezone UTC
+    
+    # Clean up
+    log_info "Cleaning up installation"
+    rm -f /mnt/etc/resolv.conf
+    
+    # Unmount filesystems
+    log_info "Unmounting filesystems"
+    umount /mnt/sys
+    umount /mnt/proc  
+    umount /mnt/dev
+    umount /mnt/boot
     umount /mnt
     
-    log_info "System configuration completed"
+    log_info "Final configuration completed"
 }
 
 # Main installation function
 main() {
-    echo "DEBUG: Starting main function"
     show_banner
-    echo "DEBUG: Banner shown"
     validate_environment
-    echo "DEBUG: Environment validated"
     get_configuration
-    echo "DEBUG: Configuration complete"
     
-    log_step "Starting BRUTAL Alpine Installation"
-    echo "DEBUG: About to start brutal disk wipe"
+    log_step "Starting KioskBook Installation"
     
-    brutal_disk_wipe
-    echo "DEBUG: Disk wipe completed"
-    install_alpine
-    echo "DEBUG: Alpine installation completed"
-    setup_phases
-    echo "DEBUG: Phase setup completed"
+    prepare_disk
+    install_debian_base
+    install_packages
+    configure_kiosk_user
+    setup_kiosk_application
+    configure_boot
+    final_configuration
     
-    log_info "Phase 1 installation completed successfully!"
     echo
-    echo -e "${GREEN}PHASE 1 INSTALLATION SUCCESSFUL!${NC}"
+    echo -e "${GREEN}KIOSKBOOK INSTALLATION COMPLETED!${NC}"
     echo
-    echo "Installed:"
-    echo "• Alpine Linux on $DISK"
-    echo "• SSH enabled (root password set)"
+    echo "Installation Summary:"
+    echo "• OS: Debian Stable (minimal)"
     echo "• Hostname: kioskbook"
-    echo "• Kiosk repo: $GITHUB_REPO"
-    echo "• Phase 2 & 3 scripts ready"
+    echo "• Kiosk App: $GITHUB_REPO"
+    echo "• Boot: Fast (<10 seconds)"
+    echo "• Access: SSH enabled, Tailscale installed"
+    echo "• User: kiosk (auto-login)"
     echo
-    echo -e "${YELLOW}IMPORTANT: Remove the USB installer now!${NC}"
+    echo "The system will reboot into your kiosk application."
+    echo "For remote access, run: tailscale up"
     echo
-    echo -n "Remove USB drive and press Enter to reboot..."
-    read
+    echo "Rebooting in 10 seconds..."
+    sleep 10
     reboot
 }
 
-# Debug: Script is being executed
-echo "DEBUG: KioskBook installer script starting..."
-echo "DEBUG: Current user: $(whoami)"
-echo "DEBUG: Current directory: $(pwd)"
-echo "DEBUG: Script arguments: $@"
-
 # Run main function
 main "$@"
-
-echo "DEBUG: Script completed successfully"

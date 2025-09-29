@@ -236,8 +236,14 @@ while ! curl -s http://localhost:3000 > /dev/null; do
     sleep 1
 done
 
-# Launch Chromium in kiosk mode
-chromium --kiosk --noerrdialogs --disable-infobars --no-first-run \
+# Detect display resolution
+RESOLUTION=$(xrandr | grep '\*' | awk '{print $1}' | head -1)
+WIDTH=$(echo $RESOLUTION | cut -d'x' -f1)
+HEIGHT=$(echo $RESOLUTION | cut -d'x' -f2)
+
+# Launch Chromium in kiosk mode with full screen
+chromium --kiosk --start-fullscreen --window-size=$WIDTH,$HEIGHT \
+    --noerrdialogs --disable-infobars --no-first-run \
     --disable-session-crashed-bubble --disable-features=TranslateUI \
     --check-for-update-interval=31536000 http://localhost:3000
 EOF

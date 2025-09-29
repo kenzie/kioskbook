@@ -167,6 +167,7 @@ get_configuration() {
     echo
     echo -n -e "${CYAN}Continue with $DISK? (y/N)${NC}: "
     read confirm
+    clear
     
     if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
         log_info "Installation cancelled by user"
@@ -176,6 +177,7 @@ get_configuration() {
     # Get GitHub repository
     echo -n -e "${CYAN}Kiosk display git repo${NC} [kenzie/lobby-display]: "
     read GITHUB_REPO
+    clear
     
     if [ -z "$GITHUB_REPO" ]; then
         GITHUB_REPO="kenzie/lobby-display"
@@ -202,10 +204,31 @@ get_configuration() {
     echo
     echo -n "Proceed with installation? (y/N): "
     read confirm
+    clear
     
     if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
         log_info "Installation cancelled"
         exit 0
+    fi
+    
+    # Set root password
+    echo -e "${CYAN}Setting root password${NC}"
+    echo -n "Enter root password: "
+    read -s ROOT_PASSWORD
+    echo
+    echo -n "Confirm root password: "
+    read -s ROOT_PASSWORD_CONFIRM
+    echo
+    clear
+    
+    if [ "$ROOT_PASSWORD" != "$ROOT_PASSWORD_CONFIRM" ]; then
+        log_error "Passwords do not match!"
+        exit 1
+    fi
+    
+    if [ -z "$ROOT_PASSWORD" ]; then
+        log_error "Root password cannot be empty!"
+        exit 1
     fi
 }
 
@@ -401,8 +424,11 @@ setup_kiosk_user() {
     # Create kiosk user
     chroot /mnt/root adduser -D -s /bin/sh kiosk
     
-    # Set password
-    echo "kiosk:kiosk" | chroot /mnt/root chpasswd
+    # Set root password
+    echo "root:$ROOT_PASSWORD" | chroot /mnt/root chpasswd
+    
+    # Set kiosk password (same as root for simplicity)
+    echo "kiosk:$ROOT_PASSWORD" | chroot /mnt/root chpasswd
     
     # Add to sudo group
     chroot /mnt/root adduser kiosk wheel

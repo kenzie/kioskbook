@@ -318,38 +318,122 @@ prepare_disk() {
     log_info "Disk preparation completed"
 }
 
-# Install minimal Alpine using setup-alpine
+# Install minimal Alpine system manually
 install_minimal_alpine() {
     log_step "Installing Minimal Alpine Linux"
     
-    # Use Alpine's setup-disk for a clean, working installation
-    log_info "Running setup-disk for target disk $DISK"
+    # Mount the partitions we already created
+    log_info "Mounting target partitions..."
+    mount "$ROOT_PARTITION" /mnt/root
+    mount "$EFI_PARTITION" /mnt/root/boot
     
-    # Set up environment for automated installation
-    export BOOTLOADER="grub"
-    export USE_EFI="yes"
-    export DISKLABEL="gpt"
+    # Copy minimal Alpine system from the running environment
+    log_info "Installing minimal Alpine system..."
     
-    # Run setup-disk (Alpine's built-in installer)
-    echo -e "y\n" | setup-disk -m sys "$DISK"
+    # Create basic directory structure
+    mkdir -p /mnt/root/{dev,proc,sys,run,tmp,var,home,opt,usr,etc}
+    mkdir -p /mnt/root/var/{log,lib,cache,lock,tmp}
+    mkdir -p /mnt/root/usr/{bin,sbin,lib,share}
+    mkdir -p /mnt/root/etc/{init.d,conf.d,runlevels,network,apk}
+    mkdir -p /mnt/root/etc/runlevels/{default,boot,sysinit,shutdown}
     
-    # Mount the newly installed system
-    mount "${ROOT_PARTITION}" /mnt/root
-    mount "${EFI_PARTITION}" /mnt/root/boot
+    # Copy essential system files
+    log_info "Copying system files..."
+    cp -a /bin /mnt/root/
+    cp -a /sbin /mnt/root/
+    cp -a /lib /mnt/root/
+    cp -a /usr/bin /mnt/root/usr/
+    cp -a /usr/sbin /mnt/root/usr/
+    cp -a /usr/lib /mnt/root/usr/
+    cp -a /usr/share /mnt/root/usr/
     
-    # Set root password
-    echo "root:$ROOT_PASSWORD" | chroot /mnt/root chpasswd
+    # Copy essential configuration
+    cp /etc/passwd /mnt/root/etc/
+    cp /etc/group /mnt/root/etc/
+    cp /etc/shadow /mnt/root/etc/
+    cp /etc/hosts /mnt/root/etc/
+    cp /etc/resolv.conf /mnt/root/etc/
+    cp /etc/fstab /mnt/root/etc/ 2>/dev/null || true
     
-    # Create kiosk user
-    chroot /mnt/root adduser -D -s /bin/sh kiosk
-    echo "kiosk:$ROOT_PASSWORD" | chroot /mnt/root chpasswd
-    chroot /mnt/root adduser kiosk wheel
+    # Copy OpenRC configuration
+    if [ -d /etc/init.d ]; then
+        cp -a /etc/init.d/* /mnt/root/etc/init.d/ 2>/dev/null || true
+    fi
+    if [ -d /etc/conf.d ]; then
+        cp -a /etc/conf.d/* /mnt/root/etc/conf.d/ 2>/dev/null || true
+    fi
+    
+    # Set up package management
+    log_info "Setting up package management..."
+    mkdir -p /mnt/root/etc/apk
+    echo "https://dl-cdn.alpinelinux.org/alpine/v3.22/main" > /mnt/root/etc/apk/repositories
+    echo "https://dl-cdn.alpinelinux.org/alpine/v3.22/community" >> /mnt/root/etc/apk/repositories
+    
+    # Copy apk cache if available
+    if [ -d /var/cache/apk ]; then
+        mkdir -p /mnt/root/var/cache/apk
+        cp -a /var/cache/apk/* /mnt/root/var/cache/apk/ 2>/dev/null || true
+    fi
+    
+    # Create basic fstab
+    cat > /mnt/root/etc/fstab << EOF
+$ROOT_PARTITION / ext4 rw,relatime 0 1
+$EFI_PARTITION /boot vfat rw,relatime,fmask=0022,dmask=0022,codepage=437,iocharset=iso8859-1,shortname=mixed,errors=remount-ro 0 2
+tmpfs /tmp tmpfs nosuid,nodev,noexec 0 0
+EOF
     
     # Set hostname
     echo "kioskbook" > /mnt/root/etc/hostname
     
-    # Enable SSH
-    chroot /mnt/root rc-update add sshd default
+    # Create network configuration
+    cat > /mnt/root/etc/network/interfaces << EOF
+auto lo
+iface lo inet loopback
+
+auto eth0
+iface eth0 inet dhcp
+EOF
+    
+    # Set root password
+    log_info "Setting passwords..."
+    echo "root:$ROOT_PASSWORD" | chroot /mnt/root chpasswd 2>/dev/null || {
+        # Manual password setting if chpasswd fails
+        ENCRYPTED_PASS=$(openssl passwd -1 "$ROOT_PASSWORD")
+        sed -i "s|^root:[^:]*:|root:$ENCRYPTED_PASS:|" /mnt/root/etc/shadow
+    }
+    
+    # Create kiosk user
+    log_info "Creating kiosk user..."
+    echo "kiosk:x:1000:1000:Kiosk User:/home/kiosk:/bin/sh" >> /mnt/root/etc/passwd
+    echo "kiosk:x:1000:" >> /mnt/root/etc/group
+    mkdir -p /mnt/root/home/kiosk
+    echo "kiosk:$ROOT_PASSWORD" | chroot /mnt/root chpasswd 2>/dev/null || {
+        ENCRYPTED_PASS=$(openssl passwd -1 "$ROOT_PASSWORD")
+        echo "kiosk:$ENCRYPTED_PASS:1::99999:7:::" >> /mnt/root/etc/shadow
+    }
+    
+    # Add kiosk to wheel group for sudo
+    sed -i 's/^wheel:.*/&kiosk/' /mnt/root/etc/group
+    
+    # Enable essential services
+    log_info "Configuring services..."
+    for service in hostname networking sshd local; do
+        if [ -f "/mnt/root/etc/init.d/$service" ]; then
+            chroot /mnt/root rc-update add "$service" default 2>/dev/null || true
+        fi
+    done
+    
+    # Create a simple bootloader
+    log_info "Setting up basic bootloader..."
+    mkdir -p /mnt/root/boot/EFI/BOOT
+    
+    # Copy kernel and initramfs if they exist
+    if [ -f /boot/vmlinuz-lts ]; then
+        cp /boot/vmlinuz-lts /mnt/root/boot/
+    fi
+    if [ -f /boot/initramfs-lts ]; then
+        cp /boot/initramfs-lts /mnt/root/boot/
+    fi
     
     log_info "Minimal Alpine installation completed"
 }

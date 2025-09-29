@@ -348,11 +348,28 @@ install_system() {
     wget https://dl-cdn.alpinelinux.org/alpine/v3.22/releases/x86_64/alpine-minirootfs-3.22.1-x86_64.tar.gz
     tar -xzf alpine-minirootfs-3.22.1-x86_64.tar.gz -C /mnt/root
     
-    # Setup apk
+    # Setup apk with reliable mirror
     setup-apkcache /mnt/root/cache
     
-    # Update package index
-    chroot /mnt/root apk update
+    # Configure reliable Alpine mirror
+    echo "https://dl-cdn.alpinelinux.org/alpine/v3.22/main" > /mnt/root/etc/apk/repositories
+    echo "https://dl-cdn.alpinelinux.org/alpine/v3.22/community" >> /mnt/root/etc/apk/repositories
+    
+    # Update package index with retry
+    log_info "Updating package index..."
+    for i in 1 2 3; do
+        if chroot /mnt/root apk update; then
+            log_info "Package index updated successfully"
+            break
+        else
+            log_warning "Package index update failed, attempt $i/3"
+            if [ $i -eq 3 ]; then
+                log_error "Failed to update package index after 3 attempts"
+                exit 1
+            fi
+            sleep 5
+        fi
+    done
     
     # Install essential packages
     chroot /mnt/root apk add \

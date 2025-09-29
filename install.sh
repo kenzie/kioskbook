@@ -293,6 +293,7 @@ install_application() {
     if [ "$USE_DIST" = true ]; then
         # Serve built files with http-server
         npm install -g http-server
+        HTTP_SERVER_PATH=$(which http-server)
         cat > /etc/systemd/system/kiosk-app.service << EOF
 [Unit]
 Description=Kiosk Vue.js Application
@@ -302,7 +303,7 @@ After=network.target
 Type=simple
 User=root
 WorkingDirectory=$APP_DIR/dist
-ExecStart=/usr/local/bin/http-server -p 3000
+ExecStart=$HTTP_SERVER_PATH -p 3000
 Restart=always
 RestartSec=10
 

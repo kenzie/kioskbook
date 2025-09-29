@@ -174,12 +174,12 @@ get_configuration() {
     fi
     
     # Get GitHub repository
-    echo -n -e "${CYAN}Kiosk display git repo${NC}: "
+    echo -n -e "${CYAN}Kiosk display git repo${NC} [kenzie/lobby-display]: "
     read GITHUB_REPO
     
     if [ -z "$GITHUB_REPO" ]; then
-        log_error "GitHub repository is required!"
-        exit 1
+        GITHUB_REPO="kenzie/lobby-display"
+        log_info "Using default repository: $GITHUB_REPO"
     fi
     
     # Convert to GitHub URL

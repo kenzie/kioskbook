@@ -3,7 +3,7 @@
 # Lenovo M75q-1 + Alpine Linux 3.22.1 USB ISO
 # Goal: Fast, reliable Alpine installation that boots
 
-set -e
+set -ex  # Enable both error exit and command tracing
 
 # Colors
 RED='\033[0;31m'
@@ -381,15 +381,23 @@ EOFPOST
 
 # Main installation function
 main() {
+    echo "DEBUG: Starting main function"
     show_banner
+    echo "DEBUG: Banner shown"
     validate_environment
+    echo "DEBUG: Environment validated"
     get_configuration
+    echo "DEBUG: Configuration complete"
     
     log_step "Starting BRUTAL Alpine Installation"
+    echo "DEBUG: About to start brutal disk wipe"
     
     brutal_disk_wipe
+    echo "DEBUG: Disk wipe completed"
     install_alpine
+    echo "DEBUG: Alpine installation completed"
     setup_phases
+    echo "DEBUG: Phase setup completed"
     
     log_info "Phase 1 installation completed successfully!"
     echo
@@ -409,5 +417,13 @@ main() {
     reboot
 }
 
+# Debug: Script is being executed
+echo "DEBUG: KioskBook installer script starting..."
+echo "DEBUG: Current user: $(whoami)"
+echo "DEBUG: Current directory: $(pwd)"
+echo "DEBUG: Script arguments: $@"
+
 # Run main function
 main "$@"
+
+echo "DEBUG: Script completed successfully"

@@ -112,10 +112,11 @@ validate_environment() {
     
     # Install required tools if missing
     log_info "Installing required tools..."
-    apk add util-linux gptfdisk e2fsprogs dosfstools
+    apk update
+    apk add util-linux
     
-    # Verify tools are now available
-    for tool in fdisk gdisk mkfs.ext4 mkfs.fat mount chroot; do
+    # Verify basic tools are available
+    for tool in fdisk mkfs.ext4 mount chroot; do
         if ! command -v "$tool" >/dev/null 2>&1; then
             log_error "Required tool '$tool' still not found after installation"
             exit 1
@@ -220,9 +221,9 @@ prepare_disk() {
     # Create partition table and partitions
     log_info "Creating partition table and partitions on $DISK"
     
-    # Create GPT partition table and partitions using gdisk
+    # Create GPT partition table and partitions using fdisk
     # EFI boot partition (512MB) and root partition (remaining space)
-    echo -e "o\ny\nn\n\n\n+512M\nef00\nn\n\n\n\n\nw\ny" | gdisk "$DISK"
+    echo -e "g\nn\n\n\n+512M\nt\n1\nn\n\n\n\nw" | fdisk "$DISK"
     
     # Wait for partitions to be created
     sleep 2
@@ -241,8 +242,15 @@ prepare_disk() {
     # Create filesystems
     log_info "Creating filesystems"
     
-    # Format EFI partition
-    mkfs.fat -F32 "$EFI_PARTITION"
+    # Format EFI partition (try different FAT tools)
+    if command -v mkfs.fat >/dev/null 2>&1; then
+        mkfs.fat -F32 "$EFI_PARTITION"
+    elif command -v mkfs.vfat >/dev/null 2>&1; then
+        mkfs.vfat -F32 "$EFI_PARTITION"
+    else
+        log_error "No FAT filesystem tool found"
+        exit 1
+    fi
     
     # Format root partition
     mkfs.ext4 -F "$ROOT_PARTITION"

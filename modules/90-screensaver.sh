@@ -330,13 +330,8 @@ EOF
 create_screensaver_service() {
     log_info "Creating screensaver systemd service..."
     
-    # Use config version if available
-    if [ -f "$KIOSKBOOK_DIR/config/screensaver.service" ]; then
-        cp "$KIOSKBOOK_DIR/config/screensaver.service" /etc/systemd/system/
-        log_info "Using screensaver service from config"
-    else
-        # Create systemd service
-        cat > /etc/systemd/system/screensaver.service << 'EOF'
+    # Create systemd service (config file is OpenRC format, not systemd)
+    cat > /etc/systemd/system/screensaver.service << 'EOF'
 [Unit]
 Description=KioskBook Screensaver Service
 After=kiosk-browser.service
@@ -353,8 +348,7 @@ StandardError=journal
 [Install]
 WantedBy=multi-user.target
 EOF
-        log_info "Created screensaver systemd service"
-    fi
+    log_info "Created screensaver systemd service"
     
     systemctl daemon-reload
     systemctl enable screensaver.service

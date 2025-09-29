@@ -186,13 +186,8 @@ EOF
 create_update_service() {
     log_info "Creating auto-update systemd service..."
     
-    # Use config version if available
-    if [ -f "$KIOSKBOOK_DIR/config/auto-update.service" ]; then
-        cp "$KIOSKBOOK_DIR/config/auto-update.service" /etc/systemd/system/
-        log_info "Using auto-update service from config"
-    else
-        # Create systemd service
-        cat > /etc/systemd/system/auto-update.service << 'EOF'
+    # Create systemd service (config file is OpenRC format, not systemd)
+    cat > /etc/systemd/system/auto-update.service << 'EOF'
 [Unit]
 Description=KioskBook Auto Update Service
 After=network.target
@@ -208,8 +203,7 @@ TimeoutStartSec=1800
 [Install]
 WantedBy=multi-user.target
 EOF
-        log_info "Created auto-update systemd service"
-    fi
+    log_info "Created auto-update systemd service"
     
     systemctl daemon-reload
     

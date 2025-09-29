@@ -46,15 +46,26 @@ set_timezone() {
 configure_locale() {
     log_info "Configuring system locale..."
     
-    # Set locale
+    # Install locales package if not present
+    if ! dpkg -l | grep -q locales; then
+        log_info "Installing locales package..."
+        apt-get install -y locales
+    fi
+    
+    # Generate en_US.UTF-8 locale
+    log_info "Generating en_US.UTF-8 locale..."
+    sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen
+    locale-gen
+    
+    # Update locale configuration
+    log_info "Updating locale configuration..."
+    update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
+    
+    # Set environment variables
     export LANG=en_US.UTF-8
     export LC_ALL=en_US.UTF-8
     
-    # Update locale
-    locale-gen en_US.UTF-8
-    update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
-    
-    log_info "Locale configured"
+    log_info "Locale configured: en_US.UTF-8"
 }
 
 # Setup log rotation

@@ -338,6 +338,12 @@ install_system() {
     mount "$EFI_PARTITION" /mnt/boot
     mount --bind /mnt/boot /mnt/root/boot
     
+    # Verify mount points
+    if ! mountpoint -q /mnt/root; then
+        log_error "/mnt/root is not properly mounted"
+        exit 1
+    fi
+    
     # Setup apk
     setup-apkcache /mnt/root/cache
     
@@ -379,7 +385,6 @@ install_system() {
         bc \
         jq \
         efibootmgr \
-        syslinux \
         imagemagick \
         fbi \
         tailscale

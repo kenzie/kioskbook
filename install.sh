@@ -355,19 +355,27 @@ install_system() {
     echo "https://mirror.csclub.uwaterloo.ca/alpine/v3.22/main" > /mnt/root/etc/apk/repositories
     echo "https://mirror.csclub.uwaterloo.ca/alpine/v3.22/community" >> /mnt/root/etc/apk/repositories
     
-    # Update package index with retry
-    log_info "Updating package index..."
-    for i in 1 2 3; do
-        if chroot /mnt/root apk update; then
-            log_info "Package index updated successfully"
+    # Try multiple Alpine mirrors for package installation
+    log_info "Installing essential packages..."
+    
+    # Try different mirrors in order of preference
+    mirrors=(
+        "https://mirror.csclub.uwaterloo.ca/alpine/v3.22"
+        "https://dl-cdn.alpinelinux.org/alpine/v3.22"
+        "https://mirror1.alpinelinux.org/alpine/v3.22"
+        "https://mirrors.edge.kernel.org/alpine/v3.22"
+    )
+    
+    for mirror in "${mirrors[@]}"; do
+        log_info "Trying mirror: $mirror"
+        echo "$mirror/main" > /mnt/root/etc/apk/repositories
+        echo "$mirror/community" >> /mnt/root/etc/apk/repositories
+        
+        if chroot /mnt/root apk update 2>/dev/null; then
+            log_info "Successfully updated package index with $mirror"
             break
         else
-            log_warning "Package index update failed, attempt $i/3"
-            if [ $i -eq 3 ]; then
-                log_error "Failed to update package index after 3 attempts"
-                exit 1
-            fi
-            sleep 5
+            log_warning "Failed to update with $mirror, trying next..."
         fi
     done
     
@@ -708,7 +716,7 @@ main() {
     echo "Your kiosk is ready to use:"
     echo "- Hostname: kioskbook"
     echo "- Kiosk App: $GITHUB_REPO"
-    echo "- Tailscale: Enabled (Required)"
+    echo "- Tailscale: Installed (Authenticate later via SSH)"
     echo "- Watchdog: Enabled"
     echo "- Auto-update: Enabled"
     echo "- Screensaver: Enabled (11 PM - 7 AM)"

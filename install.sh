@@ -112,10 +112,10 @@ validate_environment() {
     
     # Install required tools if missing
     log_info "Installing required tools..."
-    apk add parted e2fsprogs dosfstools util-linux
+    apk add util-linux gptfdisk e2fsprogs dosfstools
     
     # Verify tools are now available
-    for tool in parted mkfs.ext4 mkfs.fat mount chroot; do
+    for tool in fdisk gdisk mkfs.ext4 mkfs.fat mount chroot; do
         if ! command -v "$tool" >/dev/null 2>&1; then
             log_error "Required tool '$tool' still not found after installation"
             exit 1
@@ -220,15 +220,9 @@ prepare_disk() {
     # Create partition table and partitions
     log_info "Creating partition table and partitions on $DISK"
     
-    # Create GPT partition table
-    parted -s "$DISK" mklabel gpt
-    
-    # Create EFI boot partition (512MB)
-    parted -s "$DISK" mkpart primary fat32 1MiB 513MiB
-    parted -s "$DISK" set 1 esp on
-    
-    # Create root partition (remaining space)
-    parted -s "$DISK" mkpart primary ext4 513MiB 100%
+    # Create GPT partition table and partitions using gdisk
+    # EFI boot partition (512MB) and root partition (remaining space)
+    echo -e "o\ny\nn\n\n\n+512M\nef00\nn\n\n\n\n\nw\ny" | gdisk "$DISK"
     
     # Wait for partitions to be created
     sleep 2

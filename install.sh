@@ -74,14 +74,39 @@ validate_environment() {
         exit 1
     fi
     
-    # Check for required tools
+    # Check for required tools and try to install missing ones
+    log_info "Checking for required tools..."
+    
+    # Core tools that should be available
+    MISSING_TOOLS=""
     for tool in debootstrap parted mkfs.ext4 mkfs.fat; do
         if ! command -v "$tool" >/dev/null 2>&1; then
-            log_error "Required tool '$tool' not found"
-            log_error "Please run from Debian Live ISO with network access"
-            exit 1
+            MISSING_TOOLS="$MISSING_TOOLS $tool"
         fi
     done
+    
+    # Try to install missing tools
+    if [ -n "$MISSING_TOOLS" ]; then
+        log_warning "Missing tools:$MISSING_TOOLS"
+        log_info "Attempting to install missing tools..."
+        
+        if command -v apt-get >/dev/null 2>&1; then
+            apt-get update >/dev/null 2>&1
+            apt-get install -y debootstrap parted e2fsprogs dosfstools util-linux >/dev/null 2>&1
+        else
+            log_error "Cannot install missing tools - please use Debian Live ISO"
+            exit 1
+        fi
+        
+        # Check again
+        for tool in debootstrap parted mkfs.ext4 mkfs.fat; do
+            if ! command -v "$tool" >/dev/null 2>&1; then
+                log_error "Still missing required tool: $tool"
+                log_error "Please use Debian Live ISO instead of installer environment"
+                exit 1
+            fi
+        done
+    fi
     
     log_info "Environment validation passed"
 }
@@ -174,8 +199,12 @@ prepare_disk() {
     
     # Wipe disk
     log_info "Wiping disk and partition table"
-    wipefs -af "$DISK"
-    dd if=/dev/zero of="$DISK" bs=1M count=100 status=none
+    if command -v wipefs >/dev/null 2>&1; then
+        wipefs -af "$DISK"
+    else
+        log_warning "wipefs not available, using dd only"
+    fi
+    dd if=/dev/zero of="$DISK" bs=1M count=100 status=none 2>/dev/null || dd if=/dev/zero of="$DISK" bs=1M count=100
     
     # Create GPT partition table
     log_info "Creating partition table"

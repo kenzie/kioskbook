@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # KioskBook Auto Update Service
 
 LOG_FILE="/var/log/auto-update.log"

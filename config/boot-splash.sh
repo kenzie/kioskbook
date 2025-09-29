@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # KioskBook Boot Splash Screen with Route 19 Logo
 
 # Clear screen

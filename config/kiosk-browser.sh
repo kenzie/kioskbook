@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # KioskBook Browser Service
 
 # Wait for app to be responsive

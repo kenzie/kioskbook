@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # KioskBook Screensaver Control Script
 
 LOG_FILE="/var/log/screensaver.log"

@@ -256,7 +256,6 @@ install_system() {
         e2fsprogs \
         util-linux \
         coreutils \
-        bash \
         curl \
         wget \
         git \
@@ -285,6 +284,7 @@ install_system() {
         bc \
         jq \
         efibootmgr \
+        syslinux \
         imagemagick \
         fbi \
         tailscale
@@ -323,16 +323,30 @@ setup_fstab() {
 
 # Setup boot
 setup_boot() {
-    log_step "Setting Up Boot Configuration"
+    log_step "Setting Up Direct EFI Boot Configuration"
     
-    # Install EFI bootloader
+    # Install syslinux for EFI boot
+    chroot /mnt/root syslinux-install_update -i -a -m
+    
+    # Create syslinux configuration for direct boot
+    cat > /mnt/root/boot/syslinux/syslinux.cfg << 'EOF'
+DEFAULT linux
+LABEL linux
+  KERNEL vmlinuz-lts
+  APPEND initrd=initramfs-lts root=ROOT_PARTITION quiet
+EOF
+    
+    # Replace ROOT_PARTITION placeholder
+    sed -i "s/ROOT_PARTITION/$ROOT_PARTITION/g" /mnt/root/boot/syslinux/syslinux.cfg
+    
+    # Create EFI boot entry
     chroot /mnt/root efibootmgr --create \
         --disk "$DISK" \
         --part 1 \
         --label "KioskBook" \
         --loader /EFI/BOOT/BOOTX64.EFI
     
-    log_info "Boot configuration completed"
+    log_info "Direct EFI boot configuration completed"
 }
 
 # Setup kiosk user
@@ -340,7 +354,7 @@ setup_kiosk_user() {
     log_step "Setting Up Kiosk User"
     
     # Create kiosk user
-    chroot /mnt/root adduser -D -s /bin/bash kiosk
+    chroot /mnt/root adduser -D -s /bin/sh kiosk
     
     # Set password
     echo "kiosk:kiosk" | chroot /mnt/root chpasswd

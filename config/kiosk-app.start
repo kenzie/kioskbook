@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # Kiosk App Startup Script
 
 cd /opt/kiosk-app

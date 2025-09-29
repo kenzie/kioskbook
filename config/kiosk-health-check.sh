@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # KioskBook Health Check Script
 
 LOG_FILE="/var/log/kiosk-health.log"

@@ -1,14 +1,17 @@
 #!/bin/bash
 #
-# KioskBook Phase 1: Brutal Debian Installation
-# 
-# Establishes a clean, bootable Debian system on Lenovo M75q-1
-# NVMe drive will be COMPLETELY ERASED
+# KioskBook: Complete Kiosk Installation
 #
-# Usage:
-# 1. Boot from Debian netinst USB
-# 2. Select "Advanced options > Rescue mode"
-# 3. Drop to shell, run: bash install.sh
+# Transforms a minimal Debian system into a fast-booting (<10s), self-recovering
+# kiosk running Vue.js applications in full-screen Chromium.
+#
+# Prerequisites:
+# - Minimal Debian installation (tested on Debian 13/trixie)
+# - Root access
+# - Internet connection
+# - Node.js and npm installed
+#
+# Usage: bash install.sh
 #
 
 set -e
@@ -22,19 +25,21 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 
 # Configuration
-HOSTNAME="kioskbook"
-INSTALL_DISK="/dev/nvme0n1"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TIMEZONE="America/Halifax"
+KIOSK_USER="kiosk"
+KIOSK_HOME="/home/kiosk"
+APP_DIR="/opt/kiosk-app"
 
 show_banner() {
     clear
     echo -e "${CYAN}"
     echo "╔═══════════════════════════════════════════════════════╗"
     echo "║                                                       ║"
-    echo "║              KIOSKBOOK PHASE 1                        ║"
-    echo "║         Brutal Debian Installation                    ║"
+    echo "║                  KIOSKBOOK INSTALLER                  ║"
+    echo "║          Fast-Boot Kiosk Deployment System            ║"
     echo "║                                                       ║"
-    echo "║    Lenovo M75q-1 | Debian 12 | NVMe Install          ║"
+    echo "║         Lenovo M75q-1 | Debian 13 | <10s Boot        ║"
     echo "║                                                       ║"
     echo "╚═══════════════════════════════════════════════════════╝"
     echo -e "${NC}"
@@ -60,375 +65,420 @@ log_step() {
 # Get user configuration
 get_configuration() {
     log_step "Configuration"
-    
+
     # GitHub repo for Vue.js application
-    echo -n -e "${CYAN}Vue.js application git repository${NC}: "
+    echo -e "${CYAN}Vue.js application git repository${NC}"
+    echo -n -e "(default: https://github.com/kenzie/lobby-display): "
     read GITHUB_REPO
     if [ -z "$GITHUB_REPO" ]; then
-        log_error "GitHub repository is required"
+        GITHUB_REPO="https://github.com/kenzie/lobby-display"
+        log_info "Using default repository: $GITHUB_REPO"
     fi
-    
-    # Root password
-    echo -n -e "${CYAN}Root password for SSH access${NC}: "
-    read -s ROOT_PASSWORD
-    echo
-    echo -n -e "${CYAN}Confirm password${NC}: "
-    read -s ROOT_PASSWORD_CONFIRM
-    echo
-    
-    if [ "$ROOT_PASSWORD" != "$ROOT_PASSWORD_CONFIRM" ]; then
-        log_error "Passwords don't match"
-    fi
-    
-    if [ ${#ROOT_PASSWORD} -lt 8 ]; then
-        log_error "Password must be at least 8 characters"
+
+    # Tailscale auth key
+    echo -e "\n${CYAN}Tailscale auth key for remote access${NC}"
+    echo -n -e "(required - get from https://login.tailscale.com/admin/settings/keys): "
+    read TAILSCALE_KEY
+    if [ -z "$TAILSCALE_KEY" ]; then
+        log_error "Tailscale auth key is required for remote management"
     fi
 }
 
-# Show summary and get brutal confirmation
+# Show summary and confirm
 show_summary() {
     log_step "Installation Summary"
-    
+
+    HOSTNAME=$(hostname)
     echo -e "${CYAN}Hostname:${NC}         $HOSTNAME"
-    echo -e "${CYAN}Target Disk:${NC}      $INSTALL_DISK"
     echo -e "${CYAN}Timezone:${NC}         $TIMEZONE"
+    echo -e "${CYAN}Kiosk User:${NC}       $KIOSK_USER"
     echo -e "${CYAN}Application:${NC}      $GITHUB_REPO"
-    echo -e "${CYAN}SSH Access:${NC}       Enabled with root password"
-    
-    echo -e "\n${RED}╔═══════════════════════════════════════════════════════╗${NC}"
-    echo -e "${RED}║                                                       ║${NC}"
-    echo -e "${RED}║  WARNING: ALL DATA ON $INSTALL_DISK WILL BE DESTROYED  ║${NC}"
-    echo -e "${RED}║                                                       ║${NC}"
-    echo -e "${RED}║  This action is IRREVERSIBLE and IMMEDIATE            ║${NC}"
-    echo -e "${RED}║                                                       ║${NC}"
-    echo -e "${RED}╚═══════════════════════════════════════════════════════╝${NC}"
-    
-    echo -e "\n${YELLOW}To confirm, type exactly:${NC} ${RED}DESTROY${NC}"
+    echo -e "${CYAN}App Directory:${NC}    $APP_DIR"
+    echo -e "${CYAN}Tailscale:${NC}        Enabled"
+    echo -e "${CYAN}SSH Access:${NC}       Enabled (root)"
+
+    echo -e "\n${YELLOW}This will install:${NC}"
+    echo -e "  - X11 display server"
+    echo -e "  - Chromium browser (kiosk mode)"
+    echo -e "  - Vue.js application from GitHub"
+    echo -e "  - Tailscale VPN"
+    echo -e "  - Auto-login and kiosk services"
+    echo -e "  - Boot optimization (<10s target)"
+
+    echo -e "\n${GREEN}Ready to proceed?${NC} [y/N]"
     echo -n "> "
     read CONFIRM
-    
-    if [ "$CONFIRM" != "DESTROY" ]; then
-        log_error "Installation cancelled - confirmation failed"
+
+    if [ "$CONFIRM" != "y" ] && [ "$CONFIRM" != "Y" ]; then
+        log_error "Installation cancelled"
     fi
 }
 
-# Verify hardware
-verify_hardware() {
-    log_step "Hardware Verification"
-    
-    # Check if NVMe drive exists
-    if [ ! -b "$INSTALL_DISK" ]; then
-        log_error "NVMe drive $INSTALL_DISK not found!"
+# Verify system prerequisites
+verify_system() {
+    log_step "System Verification"
+
+    # Check running as root
+    if [ "$(id -u)" != "0" ]; then
+        log_error "This script must be run as root"
     fi
-    
-    DISK_SIZE=$(lsblk -dno SIZE $INSTALL_DISK)
-    log_info "Found NVMe drive: $INSTALL_DISK ($DISK_SIZE)"
-    
+    log_info "Running as root ✓"
+
+    # Check Debian version
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        log_info "Detected: $PRETTY_NAME"
+        if [ "$ID" != "debian" ]; then
+            log_warn "Not Debian - may have compatibility issues"
+        fi
+    fi
+
     # Check for AMD GPU
     if lspci | grep -i amd | grep -i vga >/dev/null 2>&1; then
         GPU_INFO=$(lspci | grep -i amd | grep -i vga | head -1)
-        log_info "Detected AMD GPU: $GPU_INFO"
+        log_info "AMD GPU detected: $(echo $GPU_INFO | cut -d: -f3)"
+    else
+        log_warn "No AMD GPU detected - may have display issues"
     fi
-    
+
     # Check network
     if ! ping -c 1 8.8.8.8 >/dev/null 2>&1; then
-        log_error "No network connectivity - ethernet required"
+        log_error "No network connectivity - internet required"
     fi
-    log_info "Network connectivity verified"
-}
+    log_info "Network connectivity ✓"
 
-# Brutally wipe and partition disk
-partition_disk() {
-    log_step "Disk Partitioning"
-    
-    log_warn "Wiping $INSTALL_DISK..."
-    
-    # Unmount anything mounted
-    umount ${INSTALL_DISK}* 2>/dev/null || true
-    
-    # Zero out partition table
-    dd if=/dev/zero of=$INSTALL_DISK bs=512 count=1 conv=notrunc
-    
-    # Create GPT partition table with optimal alignment
-    parted -s $INSTALL_DISK mklabel gpt
-    parted -s $INSTALL_DISK mkpart primary fat32 1MiB 513MiB
-    parted -s $INSTALL_DISK set 1 esp on
-    parted -s $INSTALL_DISK mkpart primary ext4 513MiB 100%
-    
-    # Wait for kernel to recognize partitions
-    sleep 2
-    partprobe $INSTALL_DISK
-    sleep 2
-    
-    # Format partitions
-    log_info "Formatting partitions..."
-    mkfs.fat -F32 -n BOOT ${INSTALL_DISK}p1
-    mkfs.ext4 -F -L debian-root -O ^metadata_csum,^64bit ${INSTALL_DISK}p2
-    
-    log_info "Disk partitioning complete"
-}
-
-# Mount filesystems
-mount_filesystems() {
-    log_step "Mounting Filesystems"
-    
-    # Create mount point
-    mkdir -p /mnt/debian
-    
-    # Mount root partition with optimal options
-    mount -o noatime,nodiratime ${INSTALL_DISK}p2 /mnt/debian
-    
-    # Create and mount boot partition
-    mkdir -p /mnt/debian/boot/efi
-    mount ${INSTALL_DISK}p1 /mnt/debian/boot/efi
-    
-    log_info "Filesystems mounted at /mnt/debian"
-}
-
-# Install base Debian system
-install_base_system() {
-    log_step "Installing Debian Base System"
-    
-    # Install debootstrap if needed
-    if ! command -v debootstrap &> /dev/null; then
-        log_info "Installing debootstrap..."
-        apt-get update
-        apt-get install -y debootstrap
+    # Check Node.js
+    if ! command -v node &> /dev/null; then
+        log_error "Node.js not found - please install Node.js first"
     fi
-    
-    # Bootstrap minimal Debian system
-    log_info "Bootstrapping Debian 12 (bookworm)..."
-    debootstrap --arch=amd64 --variant=minbase bookworm /mnt/debian http://deb.debian.org/debian
-    
-    log_info "Debian base system installed"
+    NODE_VERSION=$(node --version)
+    log_info "Node.js $NODE_VERSION ✓"
+
+    # Check npm
+    if ! command -v npm &> /dev/null; then
+        log_error "npm not found - please install npm first"
+    fi
+    NPM_VERSION=$(npm --version)
+    log_info "npm $NPM_VERSION ✓"
 }
 
-# Configure base system
-configure_system() {
-    log_step "Configuring Base System"
-    
-    # Set hostname
-    echo "$HOSTNAME" > /mnt/debian/etc/hostname
-    
-    # Configure hosts
-    cat > /mnt/debian/etc/hosts << EOF
-127.0.0.1       localhost
-127.0.1.1       $HOSTNAME
-::1             localhost ip6-localhost ip6-loopback
-EOF
-    
-    # Configure fstab
-    cat > /mnt/debian/etc/fstab << EOF
-# <file system> <mount point>   <type>  <options>       <dump>  <pass>
-${INSTALL_DISK}p2  /               ext4    noatime,nodiratime,errors=remount-ro 0 1
-${INSTALL_DISK}p1  /boot/efi       vfat    defaults        0 2
-tmpfs              /tmp            tmpfs   defaults,noatime,mode=1777 0 0
-EOF
-    
-    # Configure network
-    cat > /mnt/debian/etc/network/interfaces << EOF
-auto lo
-iface lo inet loopback
+# Optimize boot sequence
+optimize_boot() {
+    log_step "Optimizing Boot Sequence"
 
-allow-hotplug enp*
-iface enp* inet dhcp
-EOF
-    
-    # Set timezone
-    ln -sf /usr/share/zoneinfo/$TIMEZONE /mnt/debian/etc/localtime
-    
-    # Configure apt sources
-    cat > /mnt/debian/etc/apt/sources.list << EOF
-deb http://deb.debian.org/debian bookworm main non-free-firmware
-deb http://security.debian.org/debian-security bookworm-security main non-free-firmware
-deb http://deb.debian.org/debian bookworm-updates main non-free-firmware
-EOF
-    
-    log_info "Base system configured"
+    # Configure GRUB for instant boot
+    log_info "Configuring GRUB for fast boot..."
+    sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=0/' /etc/default/grub
+    sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet loglevel=3 vga=current"/' /etc/default/grub
+    update-grub
+
+    # Disable unnecessary services
+    log_info "Disabling unnecessary services..."
+    systemctl disable bluetooth.service 2>/dev/null || true
+    systemctl disable cups.service 2>/dev/null || true
+    systemctl disable ModemManager.service 2>/dev/null || true
+    systemctl mask plymouth-quit-wait.service 2>/dev/null || true
+
+    log_info "Boot optimization complete"
 }
 
-# Install essential packages
-install_essential_packages() {
-    log_step "Installing Essential Packages"
-    
-    # Mount necessary filesystems for chroot
-    mount --bind /dev /mnt/debian/dev
-    mount --bind /dev/pts /mnt/debian/dev/pts
-    mount --bind /proc /mnt/debian/proc
-    mount --bind /sys /mnt/debian/sys
-    
-    # Update package database
-    chroot /mnt/debian apt-get update
-    
-    # Install essential packages
-    log_info "Installing kernel and essential packages..."
-    chroot /mnt/debian apt-get install -y --no-install-recommends \
-        linux-image-amd64 \
-        grub-efi-amd64 \
-        firmware-linux \
-        firmware-amd-graphics \
-        openssh-server \
-        ca-certificates \
-        curl \
-        wget \
-        git \
-        sudo \
-        systemd-timesyncd
-    
-    log_info "Essential packages installed"
+# Install display stack
+install_display_stack() {
+    log_step "Installing Display Stack"
+
+    log_info "Installing X11 and Chromium..."
+    apt-get update
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        xorg \
+        xserver-xorg-video-amdgpu \
+        chromium \
+        chromium-driver \
+        unclutter \
+        x11-xserver-utils
+
+    log_info "Display stack installed"
 }
 
-# Configure SSH
-configure_ssh() {
-    log_step "Configuring SSH"
-    
-    # Set root password
-    echo "root:$ROOT_PASSWORD" | chroot /mnt/debian chpasswd
-    
-    # Enable SSH
-    chroot /mnt/debian systemctl enable ssh
-    
-    # Configure SSH for security
-    cat >> /mnt/debian/etc/ssh/sshd_config << EOF
+# Create kiosk user
+create_kiosk_user() {
+    log_step "Creating Kiosk User"
 
-# KioskBook security settings
-PermitRootLogin yes
-PasswordAuthentication yes
-PubkeyAuthentication yes
-EOF
-    
-    log_info "SSH configured with root access"
-}
+    # Create kiosk user
+    if ! id -u $KIOSK_USER >/dev/null 2>&1; then
+        useradd -m -s /bin/bash $KIOSK_USER
+        log_info "Created user: $KIOSK_USER"
+    else
+        log_info "User $KIOSK_USER already exists"
+    fi
 
-# Install and configure GRUB
-install_bootloader() {
-    log_step "Installing GRUB Bootloader"
-    
-    # Install GRUB to EFI partition
-    chroot /mnt/debian grub-install --target=x86_64-efi \
-        --efi-directory=/boot/efi \
-        --bootloader-id=debian \
-        --recheck
-    
-    # Configure GRUB for fast boot
-    cat > /mnt/debian/etc/default/grub << EOF
-GRUB_DEFAULT=0
-GRUB_TIMEOUT=0
-GRUB_DISTRIBUTOR="KioskBook"
-GRUB_CMDLINE_LINUX_DEFAULT="quiet loglevel=3 vga=current"
-GRUB_CMDLINE_LINUX=""
+    # Configure auto-login
+    log_info "Configuring auto-login..."
+    mkdir -p /etc/systemd/system/getty@tty1.service.d/
+    cat > /etc/systemd/system/getty@tty1.service.d/override.conf << EOF
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin $KIOSK_USER --noclear %I \$TERM
 EOF
-    
-    # Generate GRUB configuration
-    chroot /mnt/debian update-grub
-    
-    log_info "GRUB bootloader installed"
-}
 
-# Prepare phase 2 and 3 scripts
-prepare_next_phases() {
-    log_step "Preparing Phase 2 and 3 Scripts"
-    
-    # Store configuration for next phases
-    cat > /mnt/debian/root/kioskbook.conf << EOF
-GITHUB_REPO="$GITHUB_REPO"
-HOSTNAME="$HOSTNAME"
-TIMEZONE="$TIMEZONE"
-EOF
-    
-    # Create placeholder scripts
-    cat > /mnt/debian/root/phase2-harden.sh << 'EOF'
+    # Create .xinitrc for kiosk user
+    cat > $KIOSK_HOME/.xinitrc << 'EOF'
 #!/bin/bash
-# Phase 2: System Hardening
-# To be implemented
-echo "Phase 2 script ready - will implement Tailscale + monitoring"
+# Disable screen blanking
+xset s off
+xset -dpms
+xset s noblank
+
+# Hide cursor
+unclutter -idle 0.1 &
+
+# Wait for kiosk app to be ready
+while ! curl -s http://localhost:3000 > /dev/null; do
+    sleep 1
+done
+
+# Launch Chromium in kiosk mode
+chromium --kiosk --noerrdialogs --disable-infobars --no-first-run \
+    --disable-session-crashed-bubble --disable-features=TranslateUI \
+    --check-for-update-interval=31536000 http://localhost:3000
 EOF
-    
-    cat > /mnt/debian/root/phase3-kiosk.sh << 'EOF'
-#!/bin/bash
-# Phase 3: Kiosk Setup
-# To be implemented
-echo "Phase 3 script ready - will implement X11 + Chromium + Vue.js"
+    chmod +x $KIOSK_HOME/.xinitrc
+
+    # Configure .bash_profile to start X
+    cat > $KIOSK_HOME/.bash_profile << 'EOF'
+if [[ -z $DISPLAY ]] && [[ $(tty) = /dev/tty1 ]]; then
+    exec startx
+fi
 EOF
-    
-    chmod +x /mnt/debian/root/phase2-harden.sh
-    chmod +x /mnt/debian/root/phase3-kiosk.sh
-    
-    log_info "Phase 2 and 3 scripts prepared in /root/"
+
+    chown -R $KIOSK_USER:$KIOSK_USER $KIOSK_HOME
+
+    log_info "Kiosk user configured with auto-login"
 }
 
-# Cleanup and finish
-cleanup_and_finish() {
+# Install and configure Vue.js application
+install_application() {
+    log_step "Installing Vue.js Application"
+
+    # Clone repository
+    log_info "Cloning application from $GITHUB_REPO..."
+    if [ -d "$APP_DIR" ]; then
+        log_warn "App directory exists, removing..."
+        rm -rf $APP_DIR
+    fi
+
+    git clone $GITHUB_REPO $APP_DIR
+    cd $APP_DIR
+
+    # Install dependencies
+    log_info "Installing npm dependencies..."
+    npm install
+
+    # Build application
+    log_info "Building production bundle..."
+    if npm run build 2>/dev/null; then
+        log_info "Build successful"
+        # Check if dist directory exists
+        if [ -d "dist" ]; then
+            USE_DIST=true
+        else
+            USE_DIST=false
+        fi
+    else
+        log_warn "Build failed or no build script, will serve in dev mode"
+        USE_DIST=false
+    fi
+
+    # Create systemd service for app
+    log_info "Creating kiosk-app service..."
+    if [ "$USE_DIST" = true ]; then
+        # Serve built files with http-server
+        npm install -g http-server
+        cat > /etc/systemd/system/kiosk-app.service << EOF
+[Unit]
+Description=Kiosk Vue.js Application
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=$APP_DIR/dist
+ExecStart=/usr/local/bin/http-server -p 3000
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    else
+        # Serve in dev mode
+        cat > /etc/systemd/system/kiosk-app.service << EOF
+[Unit]
+Description=Kiosk Vue.js Application
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=$APP_DIR
+ExecStart=/usr/bin/npm run dev
+Restart=always
+RestartSec=10
+Environment="HOST=0.0.0.0"
+Environment="PORT=3000"
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    fi
+
+    systemctl daemon-reload
+    systemctl enable kiosk-app.service
+    systemctl start kiosk-app.service
+
+    log_info "Application installed and started"
+}
+
+# Install and configure Tailscale
+install_tailscale() {
+    log_step "Installing Tailscale VPN"
+
+    # Add Tailscale repository
+    log_info "Adding Tailscale repository..."
+    curl -fsSL https://pkgs.tailscale.com/stable/debian/trixie.noarmor.gpg | tee /usr/share/keyrings/tailscale-archive-keyring.gpg >/dev/null
+    curl -fsSL https://pkgs.tailscale.com/stable/debian/trixie.tailscale-keyring.list | tee /etc/apt/sources.list.d/tailscale.list
+
+    # Install Tailscale
+    log_info "Installing Tailscale..."
+    apt-get update
+    apt-get install -y tailscale
+
+    # Authenticate Tailscale
+    log_info "Authenticating Tailscale..."
+    tailscale up --authkey=$TAILSCALE_KEY --accept-routes --ssh
+
+    log_info "Tailscale VPN configured"
+}
+
+# Setup monitoring and recovery
+setup_monitoring() {
+    log_step "Setting Up Monitoring & Recovery"
+
+    # Create health check script
+    log_info "Creating health check script..."
+    if [ -f "$SCRIPT_DIR/config/kiosk-health-check.sh" ]; then
+        cp $SCRIPT_DIR/config/kiosk-health-check.sh /opt/kiosk-health-check.sh
+        chmod +x /opt/kiosk-health-check.sh
+    else
+        # Create basic health check
+        cat > /opt/kiosk-health-check.sh << 'EOF'
+#!/bin/bash
+# Basic kiosk health check
+
+# Check if kiosk app is responding
+if ! curl -s http://localhost:3000 > /dev/null; then
+    echo "ERROR: Kiosk app not responding"
+    systemctl restart kiosk-app.service
+fi
+
+# Check if X is running
+if ! pgrep -u kiosk X > /dev/null; then
+    echo "ERROR: X server not running"
+fi
+
+echo "Health check complete"
+EOF
+        chmod +x /opt/kiosk-health-check.sh
+    fi
+
+    # Configure service restart policies
+    log_info "Configuring service restart policies..."
+    mkdir -p /etc/systemd/system/kiosk-app.service.d/
+    cat > /etc/systemd/system/kiosk-app.service.d/restart.conf << EOF
+[Service]
+Restart=always
+RestartSec=10
+StartLimitInterval=0
+EOF
+
+    systemctl daemon-reload
+
+    log_info "Monitoring and recovery configured"
+}
+
+# Finalize installation
+finalize_installation() {
     log_step "Finalizing Installation"
-    
-    # Unmount chroot filesystems
-    umount /mnt/debian/dev/pts
-    umount /mnt/debian/dev
-    umount /mnt/debian/proc
-    umount /mnt/debian/sys
-    
-    # Unmount main filesystems
-    umount /mnt/debian/boot/efi
-    umount /mnt/debian
-    
-    # Sync
+
+    # Set timezone
+    log_info "Setting timezone to $TIMEZONE..."
+    timedatectl set-timezone $TIMEZONE
+
+    # Sync filesystems
     sync
-    
-    log_info "Installation complete!"
+
+    log_info "Installation finalized"
 }
 
 # Show completion message
 show_completion() {
     echo -e "\n${GREEN}╔═══════════════════════════════════════════════════════╗${NC}"
     echo -e "${GREEN}║                                                       ║${NC}"
-    echo -e "${GREEN}║       PHASE 1 INSTALLATION COMPLETE!                  ║${NC}"
+    echo -e "${GREEN}║         KIOSKBOOK INSTALLATION COMPLETE!              ║${NC}"
     echo -e "${GREEN}║                                                       ║${NC}"
     echo -e "${GREEN}╚═══════════════════════════════════════════════════════╝${NC}"
-    
+
+    HOSTNAME=$(hostname)
+    CURRENT_BOOT_TIME=$(systemd-analyze time 2>/dev/null | grep "Startup finished in" | awk '{print $(NF-1), $NF}' || echo "unknown")
+
     echo -e "\n${CYAN}System Configuration:${NC}"
     echo -e "  Hostname: $HOSTNAME"
-    echo -e "  Disk: $INSTALL_DISK"
-    echo -e "  SSH: Enabled (root access)"
+    echo -e "  Kiosk User: $KIOSK_USER"
     echo -e "  Application: $GITHUB_REPO"
-    
+    echo -e "  App Location: $APP_DIR"
+    echo -e "  Current Boot Time: $CURRENT_BOOT_TIME"
+
+    echo -e "\n${CYAN}Services Status:${NC}"
+    systemctl is-active --quiet kiosk-app.service && echo -e "  ${GREEN}✓${NC} kiosk-app.service" || echo -e "  ${RED}✗${NC} kiosk-app.service"
+    systemctl is-active --quiet tailscaled.service && echo -e "  ${GREEN}✓${NC} tailscaled.service" || echo -e "  ${RED}✗${NC} tailscaled.service"
+
     echo -e "\n${YELLOW}Next Steps:${NC}"
-    echo -e "  1. Remove installation media"
-    echo -e "  2. Reboot the system"
-    echo -e "  3. SSH into $HOSTNAME"
-    echo -e "  4. Run: ./phase2-harden.sh"
-    echo -e "  5. Then run: ./phase3-kiosk.sh"
-    
-    echo -e "\n${BLUE}Rebooting in 10 seconds...${NC}"
-    for i in {10..1}; do
-        echo -n "$i "
-        sleep 1
-    done
-    
-    echo -e "\n${GREEN}Rebooting now!${NC}"
-    reboot
+    echo -e "  1. Reboot the system: ${CYAN}reboot${NC}"
+    echo -e "  2. System will auto-login as $KIOSK_USER and start kiosk"
+    echo -e "  3. Monitor via Tailscale SSH or local access"
+
+    echo -e "\n${YELLOW}Management Commands:${NC}"
+    echo -e "  Check app status:  ${CYAN}systemctl status kiosk-app${NC}"
+    echo -e "  Restart app:       ${CYAN}systemctl restart kiosk-app${NC}"
+    echo -e "  View app logs:     ${CYAN}journalctl -u kiosk-app -f${NC}"
+    echo -e "  Health check:      ${CYAN}/opt/kiosk-health-check.sh${NC}"
+    echo -e "  Update app:        ${CYAN}cd $APP_DIR && git pull && npm install${NC}"
+
+    echo -e "\n${BLUE}Reboot now?${NC} [y/N]"
+    echo -n "> "
+    read REBOOT_NOW
+
+    if [ "$REBOOT_NOW" = "y" ] || [ "$REBOOT_NOW" = "Y" ]; then
+        echo -e "\n${GREEN}Rebooting in 5 seconds...${NC}"
+        sleep 5
+        reboot
+    else
+        echo -e "\n${YELLOW}Remember to reboot manually when ready: ${CYAN}reboot${NC}"
+    fi
 }
 
 # Main execution
 main() {
     show_banner
-    
-    # Verify running as root
-    if [ "$(id -u)" != "0" ]; then
-        log_error "This script must be run as root"
-    fi
-    
     get_configuration
     show_summary
-    verify_hardware
-    partition_disk
-    mount_filesystems
-    install_base_system
-    configure_system
-    install_essential_packages
-    configure_ssh
-    install_bootloader
-    prepare_next_phases
-    cleanup_and_finish
+    verify_system
+    optimize_boot
+    install_display_stack
+    create_kiosk_user
+    install_application
+    install_tailscale
+    setup_monitoring
+    finalize_installation
     show_completion
 }
 

@@ -49,17 +49,18 @@ KioskBook is a bulletproof kiosk deployment platform designed for unattended ope
 - Automatic reboot into live kiosk
 
 **Installation Process:**
-2. **Base System**: Install essential linux packages
-3. **Kiosk Packages**: Install X11, Chromium, Node.js, development tools
-4. **User Setup**: Setup kiosk user with auto-login
-5. **Application Setup**: Clone repository, install dependencies, configure startup
-6. **Boot Configuration**: Install minimal bootloader, optimize boot sequence
-7. **Remote Access**: Configure SSH and install Tailscale
-8. **Final Configuration**: Set hostname, optimize services, configure auto-start
-9. **Reboot**: Automatic reboot into functioning kiosk
+1. **System Verification**: Check prerequisites (Debian, Node.js, npm, network)
+2. **Boot Optimization**: Configure GRUB for instant boot, disable unnecessary services
+3. **Display Stack**: Install X11 and Chromium with AMD GPU support
+4. **Kiosk User**: Create kiosk user with auto-login and X11 auto-start
+5. **Application Setup**: Clone Vue.js repository, install dependencies, build, and create systemd service
+6. **Remote Access**: Install and configure Tailscale VPN with SSH access
+7. **Monitoring**: Setup health checks and automatic service recovery
+8. **Finalization**: Configure timezone, sync, and prepare for first boot
 
 **Inputs:**
 - GitHub repository for kiosk application (defaults to kenzie/lobby-display)
+- Tailscale auth key for remote management (required)
 
 **Outputs:**
 - Fully functional kiosk system
@@ -103,26 +104,29 @@ KioskBook is a bulletproof kiosk deployment platform designed for unattended ope
 ## Deployment Process
 
 1. **Preparation**:
-   - Boot Lenovo M75q-1 with Alpine setup-alpine state
+   - Install minimal Debian 13 (trixie) on Lenovo M75q-1
+   - Install Node.js and npm
    - Ensure ethernet connectivity
-   - Download installation script
+   - Login as root
 
 2. **One-Shot Installation**:
    ```bash
-   wget https://raw.githubusercontent.com/kenzie/kioskbook/main/install.sh
-   chmod +x install.sh
-   ./install.sh
+   git clone https://github.com/kenzie/kioskbook.git
+   cd kioskbook
+   bash install.sh
    ```
-   - Script handles entire installation automatically
-   - Prompts for repository URL only
+   - Script prompts for:
+     - Vue.js application GitHub repository URL
+     - Tailscale auth key for remote management
+   - Installs all components automatically
    - Completes with automatic reboot into live kiosk
 
 3. **Validation**:
    - System boots directly into kiosk application
    - Verify <10 second boot time achieved
    - Confirm application displays correctly in full-screen
-   - Test remote SSH access works
-   - Verify Tailscale VPN connectivity
+   - Test remote SSH access via Tailscale
+   - Verify kiosk services are running
 
 ## Maintenance and Operations
 

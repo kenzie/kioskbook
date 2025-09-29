@@ -15,17 +15,10 @@ Professional kiosk deployment platform for Linux. Deploy web applications to ded
 ## Prerequisites
 
 **Required Environment:**
-- **Linux ISO** (latest version recommended)
-- **Root access** (installer must run as root)
-- **Internet connection** (ethernet cable connected)
-- **Target disk** (minimum 64GB, will be completely erased)
-
-**Required Tools (if available):**
-- `parted` - Disk partitioning
-- `mkfs.ext4` - Ext4 filesystem creation
-- `mkfs.fat` - FAT32 filesystem creation
-- `mount` - Filesystem mounting
-- `chroot` - System installation
+- **Debian 13 (trixie)** - Minimal installation
+- **Root access** - Installer must run as root
+- **Internet connection** - Ethernet cable connected
+- **Node.js and npm** - Pre-installed (tested with Node.js 22.x)
 
 **Hardware Requirements:**
 - **Lenovo M75q-1 Tiny** (tested configuration)
@@ -37,29 +30,33 @@ Professional kiosk deployment platform for Linux. Deploy web applications to ded
 
 ## Quick Install
 
-1. **Boot from Linux ISO**
-   - Download latest Linux ISO
-   - Boot from USB/DVD
-   - Login as `root` (no password)
+1. **Install Debian 13 (trixie)**
+   - Perform minimal Debian installation on Lenovo M75q-1
+   - Install Node.js and npm (v22.x recommended)
+   - Connect ethernet cable and verify connectivity
 
-2. **Connect ethernet cable**
-   - Ensure internet connectivity
-   - Test with: `ping 8.8.8.8`
-
-3. **Install wget and download installer**
+2. **Login as root**
    ```bash
-   apk add wget
-   wget https://raw.githubusercontent.com/kenzie/kioskbook/main/install.sh
-   chmod +x install.sh
-   sh install.sh
+   su -
+   ```
+
+3. **Clone and run installer**
+   ```bash
+   git clone https://github.com/kenzie/kioskbook.git
+   cd kioskbook
+   bash install.sh
    ```
 
 4. **Follow prompts**
-   - Confirm disk overwrite (auto-detects NVMe/SATA)
-   - Enter GitHub repository for Vue.js app
-   - Enter Tailscale auth key (required)
+   - Enter GitHub repository for Vue.js app (default: kenzie/lobby-display)
+   - Enter Tailscale auth key (get from https://login.tailscale.com/admin/settings/keys)
+   - Confirm installation
 
-**Note**: The installer is now modular, breaking down the installation into focused, manageable components for better maintainability and debugging.
+5. **Reboot**
+   - System will prompt for reboot
+   - After reboot, kiosk will auto-login and start application
+
+**Installation Time**: ~5-10 minutes depending on network speed
 
 ## Hardware Requirements
 
@@ -72,9 +69,8 @@ Professional kiosk deployment platform for Linux. Deploy web applications to ded
 ## Configuration
 
 The installer prompts for:
-- Root password
-- Tailscale auth key (required)
-- GitHub repository for kiosk display app
+- GitHub repository for kiosk display app (default: kenzie/lobby-display)
+- Tailscale auth key (required for remote management)
 
 ## Supported Applications
 
@@ -157,31 +153,27 @@ Tailscale is required for installation and provides:
 - Select same disk (will be reformatted)
 - Use same configuration
 
-## Modular Architecture
+## Installation Architecture
 
-KioskBook uses a modular installation system for better maintainability:
+KioskBook uses a single comprehensive installer (`install.sh`) that handles all setup phases:
 
 ```
-modules/
-├── 01-core-setup.sh           # Core system setup (network, bootloader, packages)
-├── 02-kiosk-app.sh            # Vue.js application setup
-├── 03-watchdog.sh             # Browser watchdog and health monitoring
-├── 04-auto-update.sh          # Auto-update service
-├── 05-screensaver.sh          # Screensaver service
-├── 06-kiosk-cli.sh            # Management CLI
-├── 07-resource-management.sh   # Resource monitoring and cleanup
-├── 08-escalating-recovery.sh  # Progressive recovery system
-├── 09-logging-debugging.sh    # Structured logging and debugging
-├── 10-tailscale.sh            # Tailscale VPN configuration
-├── 11-utilities.sh            # System optimizations and management tools
-└── 12-boot-logo.sh            # Boot logo configuration
+install.sh phases:
+1. System Verification     # Check prerequisites and hardware
+2. Boot Optimization       # Configure GRUB for <10s boot
+3. Display Stack           # Install X11, Chromium, AMD drivers
+4. Kiosk User             # Create auto-login kiosk user
+5. Application Setup      # Clone, build, and deploy Vue.js app
+6. Tailscale VPN          # Configure remote management
+7. Monitoring & Recovery  # Health checks and auto-restart
+8. Finalization           # Timezone, sync, and reboot
 ```
 
 **Benefits:**
-- **Maintainable**: Each module ~200 lines
-- **Debuggable**: Individual modules can be tested independently
-- **Scalable**: Easy to add new features without affecting existing ones
-- **Professional**: Clean separation of concerns
+- **Simple**: Single script execution
+- **Clear**: Progress displayed at each phase
+- **Idempotent**: Can be re-run safely
+- **Fast**: ~5-10 minute installation time
 
 ## Development
 

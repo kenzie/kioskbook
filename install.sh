@@ -243,11 +243,21 @@ prepare_disk() {
         exit 1
     fi
     
-    # Check if disk is mounted
-    if mount | grep -q "$DISK"; then
-        log_error "Disk $DISK is currently mounted. Please unmount it first."
-        exit 1
-    fi
+    # Clean up any previous failed installation
+    log_info "Cleaning up any previous installation..."
+    
+    # Unmount any existing mounts
+    umount /mnt/root/boot 2>/dev/null || true
+    umount /mnt/root 2>/dev/null || true
+    umount /mnt/boot 2>/dev/null || true
+    
+    # Unmount any partitions on this disk
+    for partition in $(ls ${DISK}* 2>/dev/null); do
+        umount "$partition" 2>/dev/null || true
+    done
+    
+    # Wait for unmount to complete
+    sleep 2
     
     # Create partition table and partitions
     log_info "Creating partition table and partitions on $DISK"
@@ -320,7 +330,7 @@ install_system() {
     
     # Install Alpine Linux base system
     log_info "Installing Alpine Linux base system..."
-    setup-disk -m sys /mnt/root "$DISK"
+    setup-disk -m sys /mnt/root "$ROOT_PARTITION"
     
     # Remount partitions
     log_info "Remounting partitions..."

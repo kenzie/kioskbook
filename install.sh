@@ -309,11 +309,13 @@ RESOLUTION=$(xrandr | grep '\*' | awk '{print $1}' | head -1)
 WIDTH=$(echo $RESOLUTION | cut -d'x' -f1)
 HEIGHT=$(echo $RESOLUTION | cut -d'x' -f2)
 
-# Launch Chromium in kiosk mode with full screen
+# Launch Chromium in kiosk mode with cache disabled for always-fresh content
 chromium --kiosk --start-fullscreen --window-size=$WIDTH,$HEIGHT \
     --noerrdialogs --disable-infobars --no-first-run \
     --disable-session-crashed-bubble --disable-features=TranslateUI \
-    --check-for-update-interval=31536000 http://localhost:3000
+    --check-for-update-interval=31536000 \
+    --disable-http-cache --disable-cache --disk-cache-size=1 \
+    http://localhost:3000
 EOF
     chmod +x $KIOSK_HOME/.xinitrc
 

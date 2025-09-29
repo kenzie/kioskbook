@@ -2,7 +2,7 @@
 
 ## Overview
 
-KioskBook is a bulletproof kiosk deployment platform designed for unattended operation on Lenovo M75q-1 hardware. The system transforms Alpine Linux into a fast-booting (<10 seconds), self-recovering kiosk that runs Vue.js applications in full-screen Chromium.
+KioskBook is a bulletproof kiosk deployment platform designed for unattended operation on Lenovo M75q-1 hardware. The system transforms a minimal Linux install into a fast-booting (<10 seconds), self-recovering kiosk that runs Vue.js applications in full-screen Chromium.
 
 ## Hardware Requirements
 
@@ -10,12 +10,12 @@ KioskBook is a bulletproof kiosk deployment platform designed for unattended ope
 - **Storage**: NVMe SSD (will be completely erased)
 - **Network**: Ethernet connection (fiber-backed)
 - **Display**: Any monitor with HDMI/DisplayPort
-- **Input**: Minimal (kiosk operation)
+- **Input**: Minimal (kiosk maintenance via ssh/tailscale only)
 
 ## Software Stack
 
-- **Base OS**: Alpine Linux (minimal installation)
-- **Bootloader**: systemd-boot (minimal, no boot menu)
+- **Base OS**: Linux (minimal installation)
+- **Bootloader**: Minimal, no boot menu
 - **Display Server**: X11 (minimal, no desktop environment)
 - **Browser**: Chromium (kiosk mode)
 - **Runtime**: Node.js + npm
@@ -28,17 +28,17 @@ KioskBook is a bulletproof kiosk deployment platform designed for unattended ope
 - **Recovery Time**: <30 seconds for automatic service recovery
 - **Uptime**: Designed for months of unattended operation
 - **Offline Operation**: Must work without network using cached JSON data
-- **Resource Usage**: Minimal Alpine footprint + application requirements
+- **Resource Usage**: Minimal linux footprint + application requirements
 
 ## Single-Script Installation Architecture
 
 ### One-Shot Installation (`install.sh`)
 
-**Purpose**: Complete kiosk installation from bare metal Alpine install to running kiosk in one script execution
+**Purpose**: Complete kiosk installation from bare metal linux install to running kiosk in one script execution
 
 **Features:**
 - Simple y/N disk wiping confirmation
-- Minimal Alpine base system installation
+- Minimal linux base system installation
 - Automatic package installation (X11, Chromium, Node.js)
 - Kiosk user creation and auto-login configuration
 - Application repository cloning and setup
@@ -49,7 +49,7 @@ KioskBook is a bulletproof kiosk deployment platform designed for unattended ope
 - Automatic reboot into live kiosk
 
 **Installation Process:**
-2. **Base System**: Install essential Alpine packages
+2. **Base System**: Install essential linux packages
 3. **Kiosk Packages**: Install X11, Chromium, Node.js, development tools
 4. **User Setup**: Setup kiosk user with auto-login
 5. **Application Setup**: Clone repository, install dependencies, configure startup
@@ -79,7 +79,7 @@ KioskBook is a bulletproof kiosk deployment platform designed for unattended ope
 
 - **Physical Access**: Assumed to be controlled environment
 - **Network Security**: Tailscale VPN for remote access
-- **System Security**: Minimal Alpine installation surface
+- **System Security**: Minimal linux installation surface
 - **Application Security**: Standard web application security practices
 - **Update Security**: Automatic security patches enabled
 
@@ -91,7 +91,7 @@ KioskBook is a bulletproof kiosk deployment platform designed for unattended ope
 - System-level: Watchdog timers and health checks
 
 ### Logging and Diagnostics
-- System logs: Standard Alpine/OpenRC logging
+- System logs: Standard system logging
 - Application logs: Centralized application error logging
 - Remote access: SSH + Tailscale for troubleshooting
 

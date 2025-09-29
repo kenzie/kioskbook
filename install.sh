@@ -110,11 +110,14 @@ validate_environment() {
         exit 1
     fi
     
-    # Check for required tools
+    # Install required tools if missing
+    log_info "Installing required tools..."
+    apk add parted e2fsprogs dosfstools util-linux
+    
+    # Verify tools are now available
     for tool in parted mkfs.ext4 mkfs.fat mount chroot; do
         if ! command -v "$tool" >/dev/null 2>&1; then
-            log_error "Required tool '$tool' not found"
-            log_error "Please install missing tools: apk add parted e2fsprogs dosfstools util-linux"
+            log_error "Required tool '$tool' still not found after installation"
             exit 1
         fi
     done

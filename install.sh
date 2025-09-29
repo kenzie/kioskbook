@@ -42,11 +42,11 @@ log_warning() {
 show_banner() {
     clear
     echo -e "${CYAN}"
-    echo "  _  __ _           _    ____             _    _"
-    echo " | |/ /(_) ___  ___| | _| __ )  __ _  ___| | __| |"
-    echo " | ' / | |/ _ \/ __| |/ /  _ \ / _\` |/ __| |/ /| |"
-    echo " | . \ | |  __/ (__|   <| |_) | (_| | (__|   < |_|"
-    echo " |_|\_\_|\___|\___|_|\_\____/ \__,_|\___|_|\_\(_)"
+    echo "┌─────────────────────────────────────┐"
+    echo "│                                     │"
+    echo "│        Route 19 KioskBook           │"
+    echo "│                                     │"
+    echo "└─────────────────────────────────────┘"
     echo -e "${NC}"
     echo -e "${CYAN}Professional Kiosk Deployment Platform${NC}"
     echo -e "${CYAN}Alpine Linux + Tailscale Ready${NC}"
@@ -64,7 +64,24 @@ validate_environment() {
     fi
     
     # Check if running on Alpine Linux
-    if [ ! -f /etc/alpine_release ]; then
+    alpine_detected=false
+    
+    # Check for Alpine release file
+    if [ -f /etc/alpine_release ]; then
+        alpine_detected=true
+    fi
+    
+    # Check for Alpine in os-release
+    if [ -f /etc/os-release ] && grep -q "Alpine" /etc/os-release; then
+        alpine_detected=true
+    fi
+    
+    # Check for apk package manager
+    if command -v apk >/dev/null 2>&1; then
+        alpine_detected=true
+    fi
+    
+    if [ "$alpine_detected" = "false" ]; then
         log_error "This installer is designed for Alpine Linux"
         log_error "Please boot from Alpine Linux ISO and try again"
         exit 1

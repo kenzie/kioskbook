@@ -343,10 +343,16 @@ install_system() {
     # Install Alpine Linux base system manually
     log_info "Installing Alpine Linux base system..."
     
-    # Download and extract Alpine rootfs
+    # Download and extract Alpine rootfs (use latest stable)
     cd /tmp
-    wget https://dl-cdn.alpinelinux.org/alpine/v3.22/releases/x86_64/alpine-minirootfs-3.22.1-x86_64.tar.gz
-    tar -xzf alpine-minirootfs-3.22.1-x86_64.tar.gz -C /mnt/root
+    # Try to download latest Alpine 3.22 rootfs, fallback to 3.21 if needed
+    if ! wget https://dl-cdn.alpinelinux.org/alpine/v3.22/releases/x86_64/alpine-minirootfs-3.22.1-x86_64.tar.gz; then
+        log_warning "Alpine 3.22.1 not found, trying 3.21.0"
+        wget https://dl-cdn.alpinelinux.org/alpine/v3.21/releases/x86_64/alpine-minirootfs-3.21.0-x86_64.tar.gz
+        tar -xzf alpine-minirootfs-3.21.0-x86_64.tar.gz -C /mnt/root
+    else
+        tar -xzf alpine-minirootfs-3.22.1-x86_64.tar.gz -C /mnt/root
+    fi
     
     # Setup apk with reliable mirror
     setup-apkcache /mnt/root/cache
@@ -358,15 +364,13 @@ install_system() {
     # Try multiple Alpine mirrors for package installation
     log_info "Installing essential packages..."
     
-    # Try different mirrors in order of preference
-    mirrors=(
-        "https://mirror.csclub.uwaterloo.ca/alpine/v3.22"
-        "https://dl-cdn.alpinelinux.org/alpine/v3.22"
-        "https://mirror1.alpinelinux.org/alpine/v3.22"
+    # Try different mirrors in order of preference (POSIX shell compatible)
+    for mirror in \
+        "https://mirror.csclub.uwaterloo.ca/alpine/v3.22" \
+        "https://dl-cdn.alpinelinux.org/alpine/v3.22" \
+        "https://mirror1.alpinelinux.org/alpine/v3.22" \
         "https://mirrors.edge.kernel.org/alpine/v3.22"
-    )
-    
-    for mirror in "${mirrors[@]}"; do
+    do
         log_info "Trying mirror: $mirror"
         echo "$mirror/main" > /mnt/root/etc/apk/repositories
         echo "$mirror/community" >> /mnt/root/etc/apk/repositories
@@ -379,7 +383,7 @@ install_system() {
         fi
     done
     
-    # Install essential packages
+    # Install essential packages (using available Alpine packages)
     chroot /mnt/root apk add \
         linux-lts \
         linux-firmware \
@@ -395,17 +399,12 @@ install_system() {
         xorg-server \
         xf86-video-fbdev \
         xf86-video-vesa \
-        xf86-video-intel \
-        xf86-video-amdgpu \
-        xf86-video-nouveau \
         xf86-input-evdev \
         xf86-input-keyboard \
         xf86-input-mouse \
         xset \
         xrandr \
-        xdotool \
         openrc \
-        supervisor \
         tzdata \
         openssh \
         sudo \
@@ -415,8 +414,11 @@ install_system() {
         jq \
         efibootmgr \
         imagemagick \
-        fbi \
-        tailscale
+        fbi
+    
+    # Install Tailscale using official install script
+    log_info "Installing Tailscale using official script..."
+    chroot /mnt/root sh -c "curl -fsSL https://tailscale.com/install.sh | sh" || log_warning "Tailscale installation failed"
     
     log_info "System packages installed"
 }
@@ -454,19 +456,23 @@ setup_fstab() {
 setup_boot() {
     log_step "Setting Up Direct EFI Boot Configuration"
     
-    # Install syslinux for EFI boot
-    chroot /mnt/root syslinux-install_update -i -a -m
+    # Install bootloader packages
+    chroot /mnt/root apk add syslinux efibootmgr
     
-    # Create syslinux configuration for direct boot
-    cat > /mnt/root/boot/syslinux/syslinux.cfg << 'EOF'
+    # Create EFI directory structure
+    mkdir -p /mnt/root/boot/EFI/BOOT
+    
+    # Copy syslinux EFI bootloader
+    cp /mnt/root/usr/share/syslinux/efi64/syslinux.efi /mnt/root/boot/EFI/BOOT/BOOTX64.EFI
+    
+    # Create syslinux configuration
+    mkdir -p /mnt/root/boot/syslinux
+    cat > /mnt/root/boot/syslinux/syslinux.cfg << EOF
 DEFAULT linux
 LABEL linux
-  KERNEL vmlinuz-lts
-  APPEND initrd=initramfs-lts root=ROOT_PARTITION quiet
+  KERNEL /vmlinuz-lts
+  APPEND initrd=/initramfs-lts root=$ROOT_PARTITION rw quiet
 EOF
-    
-    # Replace ROOT_PARTITION placeholder
-    sed -i "s/ROOT_PARTITION/$ROOT_PARTITION/g" /mnt/root/boot/syslinux/syslinux.cfg
     
     # Create EFI boot entry
     chroot /mnt/root efibootmgr --create \

@@ -312,9 +312,21 @@ prepare_disk() {
 install_system() {
     log_step "Installing Alpine Linux System"
     
+    # Unmount partitions before using setup-disk
+    log_info "Unmounting partitions for setup-disk..."
+    umount /mnt/root/boot 2>/dev/null || true
+    umount /mnt/root 2>/dev/null || true
+    umount /mnt/boot 2>/dev/null || true
+    
     # Install Alpine Linux base system
     log_info "Installing Alpine Linux base system..."
     setup-disk -m sys /mnt/root "$DISK"
+    
+    # Remount partitions
+    log_info "Remounting partitions..."
+    mount "$ROOT_PARTITION" /mnt/root
+    mount "$EFI_PARTITION" /mnt/boot
+    mount --bind /mnt/boot /mnt/root/boot
     
     # Setup apk
     setup-apkcache /mnt/root/cache

@@ -1,0 +1,3 @@
+#!/bin/sh
+# Authenticate Tailscale
+tailscale up --authkey=TAILSCALE_KEY --accept-routes --accept-dns=false

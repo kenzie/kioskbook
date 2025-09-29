@@ -1,0 +1,7 @@
+#!/sbin/openrc-run
+name="auto-update"
+description="KioskBook Auto Update Service"
+command="/opt/auto-update.sh"
+command_background="yes"
+pidfile="/var/run/auto-update.pid"
+start_stop_daemon_args="--chdir /opt"

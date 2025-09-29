@@ -1,0 +1,7 @@
+#!/bin/sh
+# Route 19 Startup Display
+
+# Display Route 19 logo on startup
+if [ -f /usr/share/kioskbook/boot-splash.sh ]; then
+    /usr/share/kioskbook/boot-splash.sh
+fi

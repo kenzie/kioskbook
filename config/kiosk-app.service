@@ -1,0 +1,8 @@
+#!/sbin/openrc-run
+name="kiosk-app"
+description="Kiosk Display Application"
+command="/opt/kiosk-app/start.sh"
+command_user="kiosk"
+command_background="yes"
+pidfile="/var/run/kiosk-app.pid"
+start_stop_daemon_args="--chdir /opt/kiosk-app"

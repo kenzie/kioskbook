@@ -19,34 +19,45 @@ apk update
 # Install X11 and display drivers
 echo "Installing X11 and display drivers..."
 setup-xorg-base
-apk add \
-    xf86-video-fbdev \
-    xf86-video-vesa \
-    xf86-video-intel \
-    xf86-video-amdgpu \
-    xf86-input-evdev \
-    xf86-input-keyboard \
-    xf86-input-mouse \
-    mesa-dri-gallium \
-    dbus \
-    setxkbmap \
-    kbd \
-    xrandr \
-    xset
 
-# Install Chromium browser
-echo "Installing Chromium browser..."
-apk add chromium
+# Install packages individually to handle missing packages gracefully
+echo "Installing display and input packages..."
+for pkg in xf86-video-fbdev xf86-video-vesa xf86-input-evdev xf86-input-keyboard xf86-input-mouse mesa-dri-gallium dbus xrandr xset; do
+    if apk add "$pkg" 2>/dev/null; then
+        echo "✓ Installed $pkg"
+    else
+        echo "⚠ Skipping $pkg (not available)"
+    fi
+done
 
-# Install Node.js for Vue.js app
-echo "Installing Node.js..."
-apk add nodejs npm git
+# Try optional packages
+echo "Installing optional packages..."
+for pkg in xf86-video-intel xf86-video-amdgpu setxkbmap kbd; do
+    if apk add "$pkg" 2>/dev/null; then
+        echo "✓ Installed $pkg"
+    else
+        echo "⚠ Skipping $pkg (not available)"
+    fi
+done
+
+# Install essential packages
+echo "Installing essential packages..."
+for pkg in chromium nodejs npm git curl; do
+    if apk add "$pkg" 2>/dev/null; then
+        echo "✓ Installed $pkg"
+    else
+        echo "❌ Failed to install $pkg - this may cause issues"
+    fi
+done
 
 # Install Tailscale for remote access
 echo "Installing Tailscale..."
-apk add curl
-curl -fsSL https://tailscale.com/install.sh | sh
-rc-update add tailscaled default
+if curl -fsSL https://tailscale.com/install.sh | sh; then
+    rc-update add tailscaled default || echo "⚠ Could not enable tailscaled service"
+    echo "✓ Tailscale installed"
+else
+    echo "⚠ Tailscale installation failed - continuing without it"
+fi
 
 # Create kiosk user
 echo "Creating kiosk user..."

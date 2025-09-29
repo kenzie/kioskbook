@@ -194,9 +194,77 @@ install_display_stack() {
         chromium \
         chromium-driver \
         unclutter \
-        x11-xserver-utils
+        x11-xserver-utils \
+        fonts-inter \
+        unzip \
+        curl
 
     log_info "Display stack installed"
+}
+
+# Install fonts
+install_fonts() {
+    log_step "Installing Fonts"
+
+    # Inter font already installed via apt above
+    log_info "Inter font installed via apt"
+
+    # Install Caskaydia Cove Nerd Font
+    log_info "Installing Caskaydia Cove Nerd Font..."
+    mkdir -p /usr/local/share/fonts/nerd-fonts
+    cd /usr/local/share/fonts/nerd-fonts
+    curl -fLo "CascadiaCode.zip" https://github.com/ryanoasis/nerd-fonts/releases/latest/download/CascadiaCode.zip
+    unzip -o CascadiaCode.zip
+    rm CascadiaCode.zip
+
+    # Configure font defaults
+    log_info "Configuring font defaults..."
+    cat > /etc/fonts/local.conf << 'EOF'
+<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+<fontconfig>
+    <!-- Set Inter as default sans-serif font -->
+    <alias>
+        <family>sans-serif</family>
+        <prefer>
+            <family>Inter</family>
+        </prefer>
+    </alias>
+
+    <!-- Set Caskaydia Cove Nerd Font as default monospace font -->
+    <alias>
+        <family>monospace</family>
+        <prefer>
+            <family>CaskaydiaCove Nerd Font</family>
+            <family>CaskaydiaCove Nerd Font Mono</family>
+        </prefer>
+    </alias>
+
+    <!-- Also set for common generic families -->
+    <match target="pattern">
+        <test qual="any" name="family">
+            <string>sans</string>
+        </test>
+        <edit name="family" mode="prepend" binding="same">
+            <string>Inter</string>
+        </edit>
+    </match>
+
+    <match target="pattern">
+        <test qual="any" name="family">
+            <string>mono</string>
+        </test>
+        <edit name="family" mode="prepend" binding="same">
+            <family>CaskaydiaCove Nerd Font Mono</family>
+        </edit>
+    </match>
+</fontconfig>
+EOF
+
+    # Rebuild font cache
+    fc-cache -f -v > /dev/null 2>&1
+
+    log_info "Fonts installed and configured"
 }
 
 # Create kiosk user
@@ -481,6 +549,7 @@ main() {
     verify_system
     optimize_boot
     install_display_stack
+    install_fonts
     create_kiosk_user
     install_application
     install_tailscale

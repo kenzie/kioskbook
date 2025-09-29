@@ -6,7 +6,7 @@ set -e
 trap 'handle_error $LINENO' ERR
 
 # Global variables for cleanup
-MOUNTED_PARTITIONS=()
+MOUNTED_PARTITIONS=""
 INSTALLATION_STARTED=false
 
 # Colors for output
@@ -249,12 +249,14 @@ handle_error() {
         log_info "Attempting to cleanup..."
         
         # Unmount partitions in reverse order
-        for partition in "${MOUNTED_PARTITIONS[@]}"; do
-            if mount | grep -q "$partition"; then
-                log_info "Unmounting $partition"
-                umount "$partition" 2>/dev/null || true
-            fi
-        done
+        if [ -n "$MOUNTED_PARTITIONS" ]; then
+            for partition in $MOUNTED_PARTITIONS; do
+                if mount | grep -q "$partition"; then
+                    log_info "Unmounting $partition"
+                    umount "$partition" 2>/dev/null || true
+                fi
+            done
+        fi
         
         # Remove mount points
         umount /mnt/root/boot 2>/dev/null || true

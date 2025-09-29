@@ -66,20 +66,36 @@ validate_environment() {
     # Check if running on Alpine Linux
     alpine_detected=false
     
+    # Debug: Show what files exist
+    log_info "Checking Alpine Linux detection..."
+    log_info "Files found:"
+    ls -la /etc/ | grep -E "(alpine|os-release)" || log_info "No Alpine files found"
+    
     # Check for Alpine release file
     if [ -f /etc/alpine-release ]; then
         alpine_detected=true
+        log_info "Found /etc/alpine-release"
     fi
     
     # Check for Alpine in os-release
-    if [ -f /etc/os-release ] && grep -q "Alpine" /etc/os-release; then
-        alpine_detected=true
+    if [ -f /etc/os-release ]; then
+        log_info "Found /etc/os-release, checking contents:"
+        cat /etc/os-release
+        if grep -q "Alpine" /etc/os-release; then
+            alpine_detected=true
+            log_info "Alpine found in os-release"
+        fi
     fi
     
     # Check for apk package manager
     if command -v apk >/dev/null 2>&1; then
         alpine_detected=true
+        log_info "Found apk package manager"
+    else
+        log_info "apk package manager not found"
     fi
+    
+    log_info "Alpine detection result: $alpine_detected"
     
     if [ "$alpine_detected" = "false" ]; then
         log_error "This installer is designed for Alpine Linux"

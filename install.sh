@@ -354,71 +354,112 @@ install_system() {
         tar -xzf alpine-minirootfs-3.22.1-x86_64.tar.gz -C /mnt/root
     fi
     
-    # Setup apk with reliable mirror
+    # Setup apk with local ISO packages first
     setup-apkcache /mnt/root/cache
     
-    # Configure University of Waterloo Alpine mirror
-    echo "https://mirror.csclub.uwaterloo.ca/alpine/v3.22/main" > /mnt/root/etc/apk/repositories
-    echo "https://mirror.csclub.uwaterloo.ca/alpine/v3.22/community" >> /mnt/root/etc/apk/repositories
-    
-    # Try multiple Alpine mirrors for package installation
-    log_info "Installing essential packages..."
-    
-    # Try different mirrors in order of preference (POSIX shell compatible)
-    for mirror in \
-        "https://mirror.csclub.uwaterloo.ca/alpine/v3.22" \
-        "https://dl-cdn.alpinelinux.org/alpine/v3.22" \
-        "https://mirror1.alpinelinux.org/alpine/v3.22" \
-        "https://mirrors.edge.kernel.org/alpine/v3.22"
-    do
-        log_info "Trying mirror: $mirror"
-        echo "$mirror/main" > /mnt/root/etc/apk/repositories
-        echo "$mirror/community" >> /mnt/root/etc/apk/repositories
+    # Use local packages from ISO if available
+    if [ -d "/media/cdrom/apks" ]; then
+        log_info "Using packages from ISO..."
+        echo "/media/cdrom/apks" > /mnt/root/etc/apk/repositories
+        chroot /mnt/root apk update
+        log_info "ISO packages loaded successfully"
+    else
+        log_warning "ISO packages not found, will try online mirrors"
         
-        if chroot /mnt/root apk update 2>/dev/null; then
-            log_info "Successfully updated package index with $mirror"
-            break
-        else
-            log_warning "Failed to update with $mirror, trying next..."
-        fi
-    done
+        # Try different mirrors in order of preference (POSIX shell compatible)
+        for mirror in \
+            "https://mirror.csclub.uwaterloo.ca/alpine/v3.22" \
+            "https://dl-cdn.alpinelinux.org/alpine/v3.22" \
+            "https://mirror1.alpinelinux.org/alpine/v3.22" \
+            "https://mirrors.edge.kernel.org/alpine/v3.22"
+        do
+            log_info "Trying mirror: $mirror"
+            echo "$mirror/main" > /mnt/root/etc/apk/repositories
+            echo "$mirror/community" >> /mnt/root/etc/apk/repositories
+            
+            if chroot /mnt/root apk update 2>/dev/null; then
+                log_info "Successfully updated package index with $mirror"
+                break
+            else
+                log_warning "Failed to update with $mirror, trying next..."
+            fi
+        done
+    fi
     
-    # Install essential packages (using available Alpine packages)
+    # Install core system packages (these should be on ISO)
+    log_info "Installing core system packages..."
     chroot /mnt/root apk add \
         linux-lts \
         linux-firmware \
         e2fsprogs \
         util-linux \
         coreutils \
-        curl \
-        wget \
-        git \
-        nodejs \
-        npm \
-        chromium \
-        xorg-server \
-        xf86-video-fbdev \
-        xf86-video-vesa \
-        xf86-input-evdev \
-        xf86-input-keyboard \
-        xf86-input-mouse \
-        xset \
-        xrandr \
         openrc \
         tzdata \
         openssh \
         sudo \
-        nano \
-        htop \
-        bc \
-        jq \
-        efibootmgr \
-        imagemagick \
-        fbi
+        nano || log_error "Failed to install core packages"
     
-    # Install Tailscale using official install script
-    log_info "Installing Tailscale using official script..."
-    chroot /mnt/root sh -c "curl -fsSL https://tailscale.com/install.sh | sh" || log_warning "Tailscale installation failed"
+    # Try to install additional packages (may not all be on ISO)
+    log_info "Installing additional packages..."
+    for package in curl wget git syslinux efibootmgr; do
+        if chroot /mnt/root apk add "$package" 2>/dev/null; then
+            log_info "Installed $package"
+        else
+            log_warning "$package not available"
+        fi
+    done
+    
+    # Install GUI packages if available
+    log_info "Installing GUI packages..."
+    for package in xorg-server xf86-video-fbdev xf86-video-vesa xf86-input-evdev xset; do
+        if chroot /mnt/root apk add "$package" 2>/dev/null; then
+            log_info "Installed $package"
+        else
+            log_warning "$package not available"
+        fi
+    done
+    
+    # Install development packages if available  
+    log_info "Installing development packages..."
+    for package in nodejs npm chromium; do
+        if chroot /mnt/root apk add "$package" 2>/dev/null; then
+            log_info "Installed $package"
+        else
+            log_warning "$package not available (will try online repositories later)"
+        fi
+    done
+    
+    # Install utilities if available
+    for package in htop bc jq imagemagick fbi; do
+        if chroot /mnt/root apk add "$package" 2>/dev/null; then
+            log_info "Installed $package"
+        else
+            log_warning "$package not available"
+        fi
+    done
+    
+    # Set up online repositories for missing packages
+    log_info "Setting up online repositories for missing packages..."
+    echo "https://dl-cdn.alpinelinux.org/alpine/v3.22/main" >> /mnt/root/etc/apk/repositories
+    echo "https://dl-cdn.alpinelinux.org/alpine/v3.22/community" >> /mnt/root/etc/apk/repositories
+    
+    # Update package index and install missing critical packages
+    if chroot /mnt/root apk update 2>/dev/null; then
+        log_info "Online repositories accessible, installing missing packages..."
+        for package in nodejs npm chromium; do
+            if ! chroot /mnt/root apk info -e "$package" >/dev/null 2>&1; then
+                chroot /mnt/root apk add "$package" 2>/dev/null || log_warning "Could not install $package from online repositories"
+            fi
+        done
+        
+        # Install Tailscale using official install script
+        log_info "Installing Tailscale using official script..."
+        chroot /mnt/root sh -c "curl -fsSL https://tailscale.com/install.sh | sh" || log_warning "Tailscale installation failed"
+    else
+        log_warning "Online repositories not accessible - some packages may be missing"
+        log_warning "You can install missing packages later when network is available"
+    fi
     
     log_info "System packages installed"
 }

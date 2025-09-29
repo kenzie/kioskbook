@@ -91,10 +91,12 @@ get_configuration() {
 
     # Tailscale auth key
     echo -e "\n${CYAN}Tailscale auth key for remote access${NC}"
-    echo -n -e "(required - get from https://login.tailscale.com/admin/settings/keys): "
+    echo -e "${YELLOW}(Leave empty if Tailscale is already configured)${NC}"
+    echo -n -e "(get from https://login.tailscale.com/admin/settings/keys): "
     read TAILSCALE_KEY
     if [ -z "$TAILSCALE_KEY" ]; then
-        log_error "Tailscale auth key is required for remote management"
+        log_warn "No Tailscale auth key provided - will check for existing configuration"
+        TAILSCALE_KEY=""
     fi
 }
 
@@ -225,7 +227,11 @@ run_modules() {
             # Pass arguments based on module needs
             case "$module" in
                 "30-tailscale")
-                    bash "$MODULE_SCRIPT" "$TAILSCALE_KEY"
+                    if [ -n "$TAILSCALE_KEY" ]; then
+                        bash "$MODULE_SCRIPT" "$TAILSCALE_KEY"
+                    else
+                        bash "$MODULE_SCRIPT" ""
+                    fi
                     ;;
                 "40-vue-app")
                     bash "$MODULE_SCRIPT" "$GITHUB_REPO"

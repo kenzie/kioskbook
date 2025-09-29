@@ -84,14 +84,15 @@ main() {
     
     local auth_key="$1"
     
-    if [ -z "$auth_key" ]; then
-        log_error "Usage: $0 <tailscale_auth_key>"
-    fi
-    
     # Skip if already configured
     if check_existing; then
-        log_info "Tailscale already configured, skipping"
+        log_info "Tailscale already configured, skipping installation"
         return 0
+    fi
+    
+    # Check if auth key is provided for new installation
+    if [ -z "$auth_key" ]; then
+        log_error "Usage: $0 <tailscale_auth_key> (required for new installation)"
     fi
     
     install_tailscale

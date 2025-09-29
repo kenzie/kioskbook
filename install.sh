@@ -237,15 +237,23 @@ EOF
     log_info "Alpine Linux installation completed"
 }
 
-# Configure for phases 2-3
+# Configure for phases 2-3 and fix what setup-alpine missed
 setup_phases() {
-    log_step "Setting Up Phase 2 & 3 Scripts"
+    log_step "Configuring Installed System"
     
     # Mount the installed system  
     mount "${DISK}p2" /mnt 2>/dev/null || mount "${DISK}2" /mnt
     
-    # Set root password on installed system
+    # Set root password properly (setup-alpine often fails at this)
+    log_info "Setting root password on installed system..."
     echo "root:$ROOT_PASSWORD" | chroot /mnt chpasswd
+    
+    # Ensure SSH is enabled (setup-alpine often misses this too)
+    log_info "Enabling SSH service..."
+    chroot /mnt rc-update add sshd default
+    
+    # Enable networking service
+    chroot /mnt rc-update add networking default
     
     # Create phase 2 script (system hardening)
     cat > /mnt/root/phase2-harden.sh << 'EOF'
@@ -268,10 +276,45 @@ EOFKIOSK
     # Store GitHub URL for phase 3
     echo "$GITHUB_URL" > /mnt/root/.kioskbook-repo
     
+    # Create post-boot configuration script that runs once
+    cat > /mnt/etc/local.d/kioskbook-postinstall.start << 'EOFPOST'
+#!/bin/sh
+# KioskBook post-install configuration
+# This runs once after first boot to verify everything is working
+
+# Ensure SSH is running
+if ! rc-service sshd status >/dev/null 2>&1; then
+    rc-service sshd start
+fi
+
+# Display system info
+echo "=========================================="
+echo "KioskBook Phase 1 Installation Complete"
+echo "=========================================="
+echo "Hostname: $(hostname)"
+echo "IP Address: $(ip addr show eth0 | grep 'inet ' | awk '{print $2}' | cut -d/ -f1)"
+echo "SSH Status: $(rc-service sshd status 2>/dev/null | head -1)"
+echo ""
+echo "Ready for Phase 2 & 3:"
+echo "  /root/phase2-harden.sh"
+echo "  /root/phase3-kiosk.sh"
+echo ""
+echo "Repository: $(cat /root/.kioskbook-repo)"
+echo "=========================================="
+
+# Mark as completed so this doesn't run again
+touch /root/.kioskbook-phase1-complete
+EOFPOST
+    
+    chmod +x /mnt/etc/local.d/kioskbook-postinstall.start
+    
+    # Enable local service to run our post-install script
+    chroot /mnt rc-update add local default
+    
     # Unmount
     umount /mnt
     
-    log_info "Phase scripts configured"
+    log_info "System configuration completed"
 }
 
 # Main installation function

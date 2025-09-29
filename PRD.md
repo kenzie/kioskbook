@@ -14,7 +14,7 @@ KioskBook is a bulletproof kiosk deployment platform designed for unattended ope
 
 ## Software Stack
 
-- **Base OS**: Debian Stable (minimal installation)
+- **Base OS**: Alpine Linux (minimal installation)
 - **Bootloader**: systemd-boot (minimal, no boot menu)
 - **Display Server**: X11 (minimal, no desktop environment)
 - **Browser**: Chromium (kiosk mode)
@@ -28,17 +28,17 @@ KioskBook is a bulletproof kiosk deployment platform designed for unattended ope
 - **Recovery Time**: <30 seconds for automatic service recovery
 - **Uptime**: Designed for months of unattended operation
 - **Offline Operation**: Must work without network using cached JSON data
-- **Resource Usage**: Minimal Debian footprint + application requirements
+- **Resource Usage**: Minimal Alpine footprint + application requirements
 
 ## Single-Script Installation Architecture
 
 ### One-Shot Installation (`install.sh`)
 
-**Purpose**: Complete kiosk installation from bare metal to running kiosk in one script execution
+**Purpose**: Complete kiosk installation from bare metal Alpine install to running kiosk in one script execution
 
 **Features:**
 - Simple y/N disk wiping confirmation
-- Minimal Debian base system installation
+- Minimal Alpine base system installation
 - Automatic package installation (X11, Chromium, Node.js)
 - Kiosk user creation and auto-login configuration
 - Application repository cloning and setup
@@ -49,10 +49,9 @@ KioskBook is a bulletproof kiosk deployment platform designed for unattended ope
 - Automatic reboot into live kiosk
 
 **Installation Process:**
-1. **Disk Preparation**: Wipe and partition NVMe drive
-2. **Base System**: Install minimal Debian with essential packages
+2. **Base System**: Install essential Alpine packages
 3. **Kiosk Packages**: Install X11, Chromium, Node.js, development tools
-4. **User Setup**: Create kiosk user with auto-login
+4. **User Setup**: Setup kiosk user with auto-login
 5. **Application Setup**: Clone repository, install dependencies, configure startup
 6. **Boot Configuration**: Install minimal bootloader, optimize boot sequence
 7. **Remote Access**: Configure SSH and install Tailscale
@@ -61,8 +60,6 @@ KioskBook is a bulletproof kiosk deployment platform designed for unattended ope
 
 **Inputs:**
 - GitHub repository for kiosk application (defaults to kenzie/lobby-display)
-- Root password for remote access
-- Simple y/N confirmation for data destruction
 
 **Outputs:**
 - Fully functional kiosk system
@@ -106,7 +103,7 @@ KioskBook is a bulletproof kiosk deployment platform designed for unattended ope
 ## Deployment Process
 
 1. **Preparation**:
-   - Boot Lenovo M75q-1 from Debian netinst USB
+   - Boot Lenovo M75q-1 with Alpine setup-alpine state
    - Ensure ethernet connectivity
    - Download installation script
 
@@ -117,7 +114,7 @@ KioskBook is a bulletproof kiosk deployment platform designed for unattended ope
    ./install.sh
    ```
    - Script handles entire installation automatically
-   - Prompts for repository URL and passwords only
+   - Prompts for repository URL only
    - Completes with automatic reboot into live kiosk
 
 3. **Validation**:

@@ -19,7 +19,7 @@ set -e
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
+CYAN='\033[0;36m'    # Cyan instead of dark blue - much more readable
 NC='\033[0m' # No Color
 
 # Configuration
@@ -29,7 +29,7 @@ WORK_DIR="/tmp/kioskbook-install"
 
 # Logging function
 log() {
-    printf "${BLUE}[BOOTSTRAP]${NC} %s\n" "$1"
+    printf "${CYAN}[BOOTSTRAP]${NC} %s\n" "$1"
 }
 
 log_success() {
@@ -288,9 +288,9 @@ execute_main_installer() {
 # Main bootstrap process
 main() {
     printf "\n"
-    printf "${BLUE}================================================${NC}\n"
-    printf "${BLUE}    KioskBook Alpine Linux Bootstrap${NC}\n"
-    printf "${BLUE}================================================${NC}\n"
+    printf "${CYAN}================================================${NC}\n"
+    printf "${CYAN}    KioskBook Alpine Linux Bootstrap${NC}\n"
+    printf "${CYAN}================================================${NC}\n"
     printf "\n"
     
     log "Starting bootstrap process..."

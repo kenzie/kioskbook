@@ -73,7 +73,8 @@ set_partition_paths() {
 force_unmount_existing() {
     log_info "Ensuring clean slate by unmounting any existing partitions..."
     
-    # Unmount all possible partitions from this disk
+    # Get the current root device to avoid unmounting it
+    local current_root=$(findmnt -n -o SOURCE / 2>/dev/null || echo "")
     local unmounted=false
     
     # Check all partitions that might exist on the target disk
@@ -82,18 +83,30 @@ force_unmount_existing() {
             # Check if partition is mounted
             local mount_point=$(findmnt -n -o TARGET "$part" 2>/dev/null || echo "")
             if [[ -n "$mount_point" ]]; then
+                # Skip if this is the current root filesystem
+                if [[ "$part" == "$current_root" ]] || [[ "$mount_point" == "/" ]]; then
+                    log_warning "Skipping $part (current root filesystem) - will be handled during installation"
+                    continue
+                fi
+                
+                # Skip critical system mount points
+                if [[ "$mount_point" =~ ^/(proc|sys|dev|run)$ ]]; then
+                    log_info "Skipping system mount point $mount_point"
+                    continue
+                fi
+                
                 log_info "Unmounting $part from $mount_point"
                 if umount "$part" 2>/dev/null; then
                     log_success "Successfully unmounted $part"
                     unmounted=true
                 else
-                    log_warning "Failed to unmount $part, trying force unmount..."
-                    if umount -f "$part" 2>/dev/null; then
-                        log_success "Force unmounted $part"
+                    log_warning "Failed to unmount $part, trying lazy unmount..."
+                    if umount -l "$part" 2>/dev/null; then
+                        log_success "Lazy unmounted $part"
                         unmounted=true
                     else
-                        log_error "Cannot unmount $part - may be in use by system"
-                        exit 1
+                        log_warning "Cannot unmount $part - may be in use, will continue anyway"
+                        # Don't exit - continue with installation
                     fi
                 fi
             fi
@@ -105,7 +118,7 @@ force_unmount_existing() {
         sleep 2
     fi
     
-    log_success "All existing partitions unmounted, ready for fresh installation"
+    log_success "Partition unmounting completed, proceeding with installation"
 }
 
 # Check if required tools are available

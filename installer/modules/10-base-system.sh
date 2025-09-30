@@ -42,23 +42,35 @@ BASE_PACKAGES=(
     "linux-lts"
 )
 
-# Kiosk-specific packages
-KIOSK_PACKAGES=(
+# Essential kiosk packages (must install)
+KIOSK_ESSENTIAL=(
     "nodejs"
     "npm"
-    "chromium"
     "xorg-server"
+    "eudev"
+    "dbus"
+    "elogind"
+)
+
+# Display and graphics packages
+KIOSK_GRAPHICS=(
     "xf86-video-amdgpu"
     "xf86-input-evdev"
     "xf86-input-libinput"
+    "mesa-dri-gallium"
+    "linux-firmware-amdgpu"
+)
+
+# Browser and fonts (largest packages)
+KIOSK_BROWSER=(
+    "chromium"
     "font-noto"
     "ttf-dejavu"
-    "mesa-dri-gallium"
-    "eudev"
-    "dbus"
+)
+
+# Optional packages
+KIOSK_OPTIONAL=(
     "polkit"
-    "elogind"
-    "linux-firmware-amdgpu"
 )
 
 log_info "Starting base system setup module..."
@@ -135,17 +147,45 @@ install_base_packages() {
     log_success "Base packages installed"
 }
 
-# Install kiosk-specific packages
+# Install kiosk-specific packages in stages
 install_kiosk_packages() {
-    log_info "Installing kiosk-specific packages..."
+    log_info "Installing kiosk-specific packages in stages..."
     
-    # Install kiosk packages
-    apk --root "$MOUNT_ROOT" add "${KIOSK_PACKAGES[@]}" || {
-        log_error "Failed to install kiosk packages"
+    # Stage 1: Essential packages
+    log_info "Installing essential kiosk packages..."
+    apk --root "$MOUNT_ROOT" add "${KIOSK_ESSENTIAL[@]}" || {
+        log_error "Failed to install essential kiosk packages"
         exit 1
     }
+    log_success "Essential kiosk packages installed"
     
-    log_success "Kiosk packages installed"
+    # Stage 2: Graphics packages
+    log_info "Installing graphics and display packages..."
+    apk --root "$MOUNT_ROOT" add "${KIOSK_GRAPHICS[@]}" || {
+        log_error "Failed to install graphics packages"
+        exit 1
+    }
+    log_success "Graphics packages installed"
+    
+    # Stage 3: Browser and fonts (largest)
+    log_info "Installing browser and fonts (this may take a while)..."
+    apk --root "$MOUNT_ROOT" add "${KIOSK_BROWSER[@]}" || {
+        log_error "Failed to install browser packages"
+        exit 1
+    }
+    log_success "Browser packages installed"
+    
+    # Stage 4: Optional packages (with warnings on failure)
+    log_info "Installing optional packages..."
+    for pkg in "${KIOSK_OPTIONAL[@]}"; do
+        if ! apk --root "$MOUNT_ROOT" add "$pkg" 2>/dev/null; then
+            log_warning "Optional package '$pkg' failed to install"
+        else
+            log_info "Optional package '$pkg' installed"
+        fi
+    done
+    
+    log_success "Kiosk packages installation completed"
 }
 
 # Configure hostname

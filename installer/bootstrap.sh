@@ -266,8 +266,23 @@ execute_main_installer() {
         error_exit "Bash not available after installation"
     fi
     
-    # Execute main installer
-    exec bash "./installer/main.sh" "$@"
+    # Check if main installer exists and is executable
+    if [[ ! -f "./installer/main.sh" ]]; then
+        error_exit "Main installer script not found: $WORK_DIR/installer/main.sh"
+    fi
+    
+    if [[ ! -x "./installer/main.sh" ]]; then
+        log "Making main installer executable..."
+        chmod +x "./installer/main.sh"
+    fi
+    
+    # Execute main installer with error handling
+    log "Starting KioskBook main installer..."
+    if ! bash "./installer/main.sh" "$@"; then
+        error_exit "Main installer failed. Check logs above for details."
+    fi
+    
+    log_success "KioskBook installation completed successfully!"
 }
 
 # Main bootstrap process

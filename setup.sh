@@ -1,0 +1,424 @@
+#!/bin/ash
+#
+# KioskBook Alpine Setup - Part 2
+#
+# Configures Alpine Linux as a bulletproof kiosk system.
+# Run this after booting into the base system installed by bootstrap.sh.
+#
+# Usage: ./setup.sh [github_repo] [tailscale_key]
+#
+
+set -e
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+# Configuration
+KIOSK_USER="kiosk"
+KIOSK_HOME="/home/kiosk"
+APP_DIR="/opt/kiosk-app"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Default values
+DEFAULT_REPO="https://github.com/kenzie/lobby-display"
+
+# Logging
+log() { printf "${CYAN}[SETUP]${NC} %s\n" "$1"; }
+log_success() { printf "${GREEN}[SUCCESS]${NC} %s\n" "$1"; }
+log_warning() { printf "${YELLOW}[WARNING]${NC} %s\n" "$1"; }
+log_error() { printf "${RED}[ERROR]${NC} %s\n" "$1"; exit 1; }
+
+# Banner
+show_banner() {
+    clear
+    echo -e "${CYAN}"
+    echo "═══════════════════════════════════════════════════════"
+    echo "       KioskBook Alpine Setup - Part 2"  
+    echo "    Transform Alpine into a Bulletproof Kiosk"
+    echo "═══════════════════════════════════════════════════════"
+    echo -e "${NC}"
+}
+
+# Get configuration
+get_configuration() {
+    log "Configuration"
+    
+    # GitHub repo
+    if [ -n "$1" ]; then
+        GITHUB_REPO="$1"
+    else
+        echo -n "GitHub repository (default: $DEFAULT_REPO): "
+        read GITHUB_REPO
+        if [ -z "$GITHUB_REPO" ]; then
+            GITHUB_REPO="$DEFAULT_REPO"
+        fi
+    fi
+    log "Using repository: $GITHUB_REPO"
+    
+    # Tailscale key (optional)
+    if [ -n "$2" ]; then
+        TAILSCALE_KEY="$2"
+    else
+        echo -n "Tailscale auth key (optional, press Enter to skip): "
+        read -s TAILSCALE_KEY
+        echo
+    fi
+    
+    if [ -n "$TAILSCALE_KEY" ]; then
+        log "Tailscale VPN will be configured"
+    else
+        log "Skipping Tailscale VPN setup"
+    fi
+}
+
+# Update system
+update_system() {
+    log "Updating system packages..."
+    
+    # Ensure repositories are configured
+    if ! grep -q "community" /etc/apk/repositories; then
+        echo "http://dl-cdn.alpinelinux.org/alpine/v3.22/community" >> /etc/apk/repositories
+    fi
+    
+    apk update
+    apk upgrade
+    
+    log_success "System updated"
+}
+
+# Install base packages
+install_base_packages() {
+    log "Installing base packages..."
+    
+    apk add \
+        bash \
+        git \
+        curl \
+        wget \
+        htop \
+        nano \
+        util-linux \
+        pciutils \
+        usbutils \
+        coreutils \
+        shadow \
+        sudo \
+        openrc \
+        busybox-initscripts
+        
+    log_success "Base packages installed"
+}
+
+# Install display stack
+install_display() {
+    log "Installing display stack..."
+    
+    # Install X11 and drivers
+    apk add \
+        xorg-server \
+        xf86-input-libinput \
+        xf86-video-amdgpu \
+        mesa-dri-gallium \
+        mesa-va-gallium \
+        xset \
+        xrandr \
+        xinit
+    
+    # Install Chromium
+    apk add \
+        chromium \
+        chromium-chromedriver \
+        ttf-freefont \
+        font-noto
+    
+    # Install additional tools
+    apk add \
+        unclutter-xfixes \
+        xdotool
+    
+    log_success "Display stack installed"
+}
+
+# Install fonts
+install_fonts() {
+    log "Installing fonts..."
+    
+    # Install Inter font
+    apk add font-inter
+    
+    # Install Nerd Fonts
+    mkdir -p /usr/share/fonts/nerd-fonts
+    cd /tmp
+    wget -q https://github.com/ryanoasis/nerd-fonts/releases/latest/download/CascadiaCode.zip
+    unzip -q CascadiaCode.zip -d /usr/share/fonts/nerd-fonts/
+    rm CascadiaCode.zip
+    
+    # Update font cache
+    fc-cache -fv >/dev/null 2>&1
+    
+    log_success "Fonts installed"
+}
+
+# Create kiosk user
+create_kiosk_user() {
+    log "Creating kiosk user..."
+    
+    # Create user
+    adduser -D -s /bin/bash $KIOSK_USER
+    
+    # Configure auto-login
+    # For Alpine, we use agetty
+    cat > /etc/conf.d/agetty.tty1 << EOF
+agetty_options="--autologin $KIOSK_USER --noclear"
+EOF
+    
+    # Enable agetty on tty1
+    rc-update add agetty.tty1 default
+    
+    # Create .xinitrc
+    cat > $KIOSK_HOME/.xinitrc << 'EOF'
+#!/bin/sh
+# Disable screen blanking
+xset s off
+xset -dpms
+xset s noblank
+
+# Hide cursor  
+unclutter -idle 0.1 &
+
+# Wait for app
+while ! nc -z localhost 3000; do
+    sleep 1
+done
+
+# Get display size
+RESOLUTION=$(xrandr | grep '\*' | awk '{print $1}' | head -1)
+
+# Launch Chromium
+exec chromium \
+    --kiosk \
+    --start-fullscreen \
+    --window-size=$RESOLUTION \
+    --noerrdialogs \
+    --disable-infobars \
+    --no-first-run \
+    --check-for-update-interval=31536000 \
+    --disable-features=TranslateUI \
+    http://localhost:3000
+EOF
+    chmod +x $KIOSK_HOME/.xinitrc
+    
+    # Configure auto-startx
+    cat > $KIOSK_HOME/.profile << 'EOF'
+if [ -z "$DISPLAY" ] && [ "$(tty)" = "/dev/tty1" ]; then
+    exec startx
+fi
+EOF
+    
+    chown -R $KIOSK_USER:$KIOSK_USER $KIOSK_HOME
+    
+    log_success "Kiosk user configured"
+}
+
+# Install Node.js
+install_nodejs() {
+    log "Installing Node.js..."
+    
+    apk add nodejs npm
+    
+    log_success "Node.js installed"
+}
+
+# Install application
+install_application() {
+    log "Installing application..."
+    
+    # Clone repository
+    if [ -d "$APP_DIR" ]; then
+        rm -rf $APP_DIR
+    fi
+    
+    git clone $GITHUB_REPO $APP_DIR
+    cd $APP_DIR
+    
+    # Install dependencies
+    npm install
+    
+    # Try to build
+    if npm run build 2>/dev/null; then
+        log "Application built successfully"
+    fi
+    
+    # Create OpenRC service
+    cat > /etc/init.d/kiosk-app << 'EOF'
+#!/sbin/openrc-run
+
+name="Kiosk Application"
+description="Vue.js kiosk application"
+
+command="/usr/bin/npm"
+command_args="run dev"
+command_background=true
+pidfile="/run/kiosk-app.pid"
+directory="/opt/kiosk-app"
+
+start_pre() {
+    export HOST="0.0.0.0"
+    export PORT="3000"
+}
+
+depend() {
+    need networking
+}
+EOF
+    chmod +x /etc/init.d/kiosk-app
+    
+    # Enable service
+    rc-update add kiosk-app default
+    rc-service kiosk-app start
+    
+    log_success "Application installed and started"
+}
+
+# Install Plymouth (optional)
+install_plymouth() {
+    log "Installing Plymouth boot splash..."
+    
+    # Check if plymouth is available
+    if apk info -e plymouth >/dev/null 2>&1; then
+        apk add plymouth plymouth-themes
+        
+        # Configure if theme files exist
+        if [ -d "$SCRIPT_DIR/config/boot" ]; then
+            cp -r $SCRIPT_DIR/config/boot/route19.plymouth /usr/share/plymouth/themes/
+            plymouth-set-default-theme route19
+        fi
+        
+        log_success "Plymouth installed"
+    else
+        log_warning "Plymouth not available in repositories, skipping"
+    fi
+}
+
+# Optimize boot
+optimize_boot() {
+    log "Optimizing boot sequence..."
+    
+    # Disable unnecessary services
+    rc-update del acpid default 2>/dev/null || true
+    rc-update del crond default 2>/dev/null || true
+    
+    # Configure kernel parameters for faster boot
+    if [ -f /boot/extlinux.conf ]; then
+        sed -i 's/APPEND.*/& quiet loglevel=3/' /boot/extlinux.conf
+    fi
+    
+    log_success "Boot optimized"
+}
+
+# Install Tailscale (if key provided)
+install_tailscale() {
+    if [ -z "$TAILSCALE_KEY" ]; then
+        return
+    fi
+    
+    log "Installing Tailscale VPN..."
+    
+    # Tailscale isn't in Alpine repos, install manually
+    cd /tmp
+    wget -q https://pkgs.tailscale.com/stable/tailscale_latest_amd64.tgz
+    tar xzf tailscale_latest_amd64.tgz
+    cp tailscale_*_amd64/tailscale /usr/bin/
+    cp tailscale_*_amd64/tailscaled /usr/sbin/
+    
+    # Create service
+    cat > /etc/init.d/tailscaled << 'EOF'
+#!/sbin/openrc-run
+
+name="Tailscale Daemon"
+command="/usr/sbin/tailscaled"
+command_background=true
+pidfile="/run/tailscaled.pid"
+
+depend() {
+    need net
+}
+EOF
+    chmod +x /etc/init.d/tailscaled
+    
+    # Start and configure
+    rc-service tailscaled start
+    tailscale up --authkey=$TAILSCALE_KEY --ssh
+    
+    rc-update add tailscaled default
+    
+    log_success "Tailscale configured"
+}
+
+# Finalize
+finalize() {
+    log "Finalizing installation..."
+    
+    # Set timezone
+    setup-timezone -z America/Halifax
+    
+    # Remove setup marker
+    rm -f /root/.needs_kiosk_setup
+    
+    log_success "Installation finalized"
+}
+
+# Show completion
+show_completion() {
+    echo -e "\n${GREEN}═══════════════════════════════════════════════════════${NC}"
+    echo -e "${GREEN}      KioskBook Installation Complete!${NC}"
+    echo -e "${GREEN}═══════════════════════════════════════════════════════${NC}"
+    
+    echo -e "\n${CYAN}System Status:${NC}"
+    rc-service kiosk-app status
+    
+    echo -e "\n${CYAN}Next Steps:${NC}"
+    echo -e "1. Reboot: ${YELLOW}reboot${NC}"
+    echo -e "2. System will auto-login and start kiosk"
+    
+    echo -e "\n${CYAN}Management Commands:${NC}"
+    echo -e "  Check app:    ${YELLOW}rc-service kiosk-app status${NC}"
+    echo -e "  Restart app:  ${YELLOW}rc-service kiosk-app restart${NC}"
+    echo -e "  App logs:     ${YELLOW}cat /var/log/messages | grep kiosk${NC}"
+}
+
+# Main execution
+main() {
+    show_banner
+    
+    # Check if this is first run after bootstrap
+    if [ ! -f "/root/.needs_kiosk_setup" ] && [ "$1" != "--force" ]; then
+        log_warning "System appears to be already configured"
+        echo -n "Continue anyway? [y/N]: "
+        read CONFIRM
+        if [ "$CONFIRM" != "y" ]; then
+            exit 0
+        fi
+    fi
+    
+    get_configuration "$@"
+    update_system
+    install_base_packages
+    install_display
+    install_fonts
+    create_kiosk_user
+    install_nodejs
+    install_application
+    install_plymouth
+    optimize_boot
+    install_tailscale
+    finalize
+    show_completion
+}
+
+# Run
+main "$@"

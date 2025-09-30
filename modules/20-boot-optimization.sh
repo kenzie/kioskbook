@@ -41,21 +41,19 @@ configure_grub() {
     # Set GRUB timeout to 0
     sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=0/' /etc/default/grub
     
-    # Optimize kernel parameters for completely silent boot
-    sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=0 rd.systemd.show_status=false rd.udev.log_priority=0 vga=current console=tty1 vt.global_cursor_default=0"/' /etc/default/grub
+    # Configure GRUB for clean boot (standard Debian approach)
+    sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"/' /etc/default/grub
     
-    # Hide GRUB menu completely
-    sed -i 's/^GRUB_CMDLINE_LINUX=.*/GRUB_CMDLINE_LINUX="quiet splash loglevel=0"/' /etc/default/grub
-    
-    # Hide GRUB menu
+    # Set GRUB to use graphics mode and hide menu
+    sed -i 's/^#GRUB_GFXMODE=.*/GRUB_GFXMODE=auto/' /etc/default/grub
+    sed -i 's/^#GRUB_GFXPAYLOAD_LINUX=.*/GRUB_GFXPAYLOAD_LINUX=keep/' /etc/default/grub
     sed -i 's/^#GRUB_HIDDEN_TIMEOUT=.*/GRUB_HIDDEN_TIMEOUT=0/' /etc/default/grub
     sed -i 's/^#GRUB_HIDDEN_TIMEOUT_QUIET=.*/GRUB_HIDDEN_TIMEOUT_QUIET=true/' /etc/default/grub
-    sed -i 's/^#GRUB_TERMINAL=.*/GRUB_TERMINAL=console/' /etc/default/grub
     
     # Update GRUB
     update-grub
     
-    log_info "GRUB configured for fast boot"
+    log_info "GRUB configured for clean boot"
 }
 
 # Disable unnecessary services
@@ -100,7 +98,6 @@ optimize_systemd() {
 DefaultTimeoutStartSec=10s
 DefaultTimeoutStopSec=5s
 DefaultRestartSec=100ms
-ShowStatus=no
 EOF
     
     # Optimize journald
@@ -111,26 +108,6 @@ Storage=volatile
 SystemMaxUse=50M
 RuntimeMaxUse=50M
 EOF
-    
-    # Hide systemd boot messages
-    mkdir -p /etc/systemd/system/console-getty.service.d/
-    cat > /etc/systemd/system/console-getty.service.d/override.conf << 'EOF'
-[Service]
-StandardOutput=null
-StandardError=null
-EOF
-    
-    # Hide all boot messages by redirecting console output
-    mkdir -p /etc/systemd/system/systemd-udevd.service.d/
-    cat > /etc/systemd/system/systemd-udevd.service.d/override.conf << 'EOF'
-[Service]
-StandardOutput=null
-StandardError=null
-EOF
-    
-    # Disable plymouth quit service to prevent tty flash
-    systemctl mask plymouth-quit.service 2>/dev/null || true
-    systemctl mask plymouth-quit-wait.service 2>/dev/null || true
     
     log_info "Systemd optimization configured"
 }

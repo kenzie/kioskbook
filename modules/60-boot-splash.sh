@@ -144,6 +144,9 @@ configure_plymouth() {
     if command -v plymouth >/dev/null 2>&1; then
         log_info "Plymouth found, configuring Route 19 theme..."
         
+        # Install Plymouth if not present
+        apt-get install -y plymouth plymouth-themes
+        
         # Create custom Plymouth theme directory
         mkdir -p /usr/share/plymouth/themes/route19/
         
@@ -152,7 +155,7 @@ configure_plymouth() {
             cp "/usr/share/kioskbook/route19-logo.png" "/usr/share/plymouth/themes/route19/"
         fi
         
-        # Create simple Plymouth theme (logo only, no text)
+        # Create Plymouth theme configuration
         cat > /usr/share/plymouth/themes/route19/route19.plymouth << 'EOF'
 [Plymouth Theme]
 Name=Route 19
@@ -165,27 +168,37 @@ ScriptFile=/usr/share/plymouth/themes/route19/route19.script
 EOF
         
         cat > /usr/share/plymouth/themes/route19/route19.script << 'EOF'
-# Route 19 Plymouth Theme Script - Logo Only
+# Route 19 Plymouth Theme Script
 
 # Set black background
 Window.SetBackgroundTopColor (0.0, 0.0, 0.0);
 Window.SetBackgroundBottomColor (0.0, 0.0, 0.0);
 
 # Show Route 19 logo centered
-logo_image = Image("route19-logo.png");
-logo_sprite = Sprite(logo_image);
-logo_sprite.SetPosition(screen_width / 2 - logo_image.GetWidth() / 2, screen_height / 2 - logo_image.GetHeight() / 2, 0);
-logo_sprite.SetOpacity(1);
+if [ -f "/usr/share/plymouth/themes/route19/route19-logo.png" ]; then
+    logo_image = Image("route19-logo.png");
+    logo_sprite = Sprite(logo_image);
+    logo_sprite.SetPosition(screen_width / 2 - logo_image.GetWidth() / 2, screen_height / 2 - logo_image.GetHeight() / 2, 0);
+    logo_sprite.SetOpacity(1);
+fi
 EOF
         
         # Update Plymouth configuration
-        if [ -f /etc/plymouth/plymouthd.conf ]; then
-            sed -i 's/^Theme=.*/Theme=route19/' /etc/plymouth/plymouthd.conf
-        fi
+        mkdir -p /etc/plymouth/
+        cat > /etc/plymouth/plymouthd.conf << 'EOF'
+[Daemon]
+Theme=route19
+ShowDelay=0
+EOF
         
-        log_info "Plymouth Route 19 theme configured (logo only)"
+        # Update initramfs to include Plymouth theme
+        update-initramfs -u
+        
+        log_info "Plymouth Route 19 theme configured"
     else
-        log_info "Plymouth not available, skipping theme configuration"
+        log_info "Plymouth not available, installing..."
+        apt-get install -y plymouth plymouth-themes
+        configure_plymouth
     fi
 }
 

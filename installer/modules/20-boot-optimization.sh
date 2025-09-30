@@ -136,15 +136,26 @@ create_route19_splash() {
 
 cd /tmp
 
+# Debug: Check what logo files are available
+echo "Checking for Route 19 logo files..."
+ls -la /opt/route19-logo.png 2>/dev/null && echo "Found logo at /opt/route19-logo.png" || echo "No logo at /opt/route19-logo.png"
+ls -la /data/route19-logo.png 2>/dev/null && echo "Found logo at /data/route19-logo.png" || echo "No logo at /data/route19-logo.png"
+
 # Check if actual Route 19 logo exists (should be provided during installation)
 if [[ -f "/opt/route19-logo.png" ]]; then
     echo "Using provided Route 19 logo..."
-    cp "/opt/route19-logo.png" "./route19-logo.png"
+    cp "/opt/route19-logo.png" "./route19-logo.png" || {
+        echo "Failed to copy logo from /opt - creating fallback"
+        echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChAI9jU77gwAAAABJRU5ErkJggg==" | base64 -d > "./route19-logo.png"
+    }
 elif [[ -f "/data/route19-logo.png" ]]; then
     echo "Using Route 19 logo from data partition..."
-    cp "/data/route19-logo.png" "./route19-logo.png"
+    cp "/data/route19-logo.png" "./route19-logo.png" || {
+        echo "Failed to copy logo from /data - creating fallback"
+        echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChAI9jU77gwAAAABJRU5ErkJggg==" | base64 -d > "./route19-logo.png"
+    }
 else
-    echo "Creating placeholder Route 19 logo..."
+    echo "No Route 19 logo found - creating fallback..."
     # Create a placeholder logo with Route 19 text
     if command -v convert >/dev/null 2>&1; then
         convert -size 400x200 xc:transparent \
@@ -531,6 +542,12 @@ EOF
 install_grub() {
     log_info "Installing and configuring GRUB bootloader..."
     
+    # Set up chroot environment for GRUB installation
+    log_info "Setting up chroot environment for GRUB..."
+    mount --bind /dev "$MOUNT_ROOT/dev" 2>/dev/null || log_warning "Failed to bind mount /dev"
+    mount --bind /proc "$MOUNT_ROOT/proc" 2>/dev/null || log_warning "Failed to bind mount /proc" 
+    mount --bind /sys "$MOUNT_ROOT/sys" 2>/dev/null || log_warning "Failed to bind mount /sys"
+    
     # Determine if system is EFI or BIOS
     local boot_mode="bios"
     if [[ -d "/sys/firmware/efi" ]]; then
@@ -595,6 +612,12 @@ install_grub() {
         sed -i "s/ROOT_UUID/$root_uuid/g" "$MOUNT_ROOT/boot/grub/grub.cfg"
         sed -i "s/BOOT_UUID/$boot_uuid/g" "$MOUNT_ROOT/boot/grub/grub.cfg"
     fi
+    
+    # Clean up chroot bind mounts
+    log_info "Cleaning up chroot environment..."
+    umount "$MOUNT_ROOT/sys" 2>/dev/null || true
+    umount "$MOUNT_ROOT/proc" 2>/dev/null || true 
+    umount "$MOUNT_ROOT/dev" 2>/dev/null || true
     
     log_success "GRUB installed and configured"
 }

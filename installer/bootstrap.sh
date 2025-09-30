@@ -202,47 +202,9 @@ install_packages() {
     # List of required packages 
     packages="bash git curl parted"
     
-    # Try to install kernel if available (don't fail if not found)
-    log "Attempting to pre-install kernel..."
-    
-    # Use firmware bloat prevention strategies
-    local kernel_installed=false
-    
-    # Approach 1: Try linux-virt first (minimal firmware for VMs)
-    if ! $kernel_installed; then
-        log "Trying linux-virt (VM-optimized, minimal firmware)..."
-        if apk add linux-virt mkinitfs 2>/dev/null; then
-            log_success "Pre-installed linux-virt (minimal firmware)"
-            kernel_installed=true
-        fi
-    fi
-    
-    # Approach 2: Use package masking to exclude firmware bloat
-    if ! $kernel_installed; then
-        log "Using package masking to exclude firmware bloat..."
-        echo "linux-firmware" > /etc/apk/mask
-        
-        if apk add linux-lts mkinitfs 2>/dev/null; then
-            log_success "Pre-installed linux-lts with firmware masked"
-            kernel_installed=true
-        else
-            # Remove mask if it didn't work
-            rm -f /etc/apk/mask
-        fi
-    fi
-    
-    # Approach 3: Try --no-deps as last resort
-    if ! $kernel_installed; then
-        log "Trying kernel with --no-deps (last resort)..."
-        if apk add --no-deps linux-lts mkinitfs 2>/dev/null; then
-            log_success "Pre-installed linux-lts with --no-deps"
-            kernel_installed=true
-        fi
-    fi
-    
-    if ! $kernel_installed; then
-        log_warning "Kernel pre-installation failed, will be handled by main installer"
-    fi
+    # Skip kernel pre-installation to make bootstrap faster and leaner
+    # The main installer will handle kernel installation when needed
+    log "Skipping kernel pre-installation (handled by main installer)"
     
     # Check if packages are already installed (idempotent)
     all_installed=true

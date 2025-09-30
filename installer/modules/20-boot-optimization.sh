@@ -180,27 +180,11 @@ EOF
     if chroot "$MOUNT_ROOT" /tmp/create_route19_logo.sh; then
         log_success "Route 19 logo created successfully"
     else
-        log_warning "Failed to create Route 19 logo, creating text-based fallback"
-        # Create minimal fallback with Route 19 text
+        log_error "Failed to create Route 19 logo - this will affect boot display"
+        log_error "Ensure route19-logo.png exists in repository and ImageMagick is available"
+        # Create minimal placeholder to prevent Plymouth errors
         mkdir -p "$theme_dir"
-        
-        # Try to create a simple text-based logo if ImageMagick is available
-        if chroot "$MOUNT_ROOT" command -v convert >/dev/null 2>&1; then
-            chroot "$MOUNT_ROOT" sh -c "
-                cd /tmp && \
-                convert -size 400x200 xc:black \
-                    -fill white -gravity center \
-                    -pointsize 48 -annotate +0-20 'ROUTE 19' \
-                    -pointsize 24 -annotate +0+20 'KIOSK SYSTEM' \
-                    /usr/share/plymouth/themes/route19/logo.png
-            " || {
-                # Final fallback: minimal 1x1 black PNG
-                echo -e "\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\x98\x81\x81\x81\x81\x81\x01\x00\x00\x05\x00\x01\r\n-\xdb\x00\x00\x00\x00IEND\xaeB\x60\x82" > "$theme_dir/logo.png"
-            }
-        else
-            # Final fallback: minimal 1x1 black PNG
-            echo -e "\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\x98\x81\x81\x81\x81\x81\x01\x00\x00\x05\x00\x01\r\n-\xdb\x00\x00\x00\x00IEND\xaeB\x60\x82" > "$theme_dir/logo.png"
-        fi
+        echo -e "\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\x98\x81\x81\x81\x81\x81\x01\x00\x00\x05\x00\x01\r\n-\xdb\x00\x00\x00\x00IEND\xaeB\x60\x82" > "$theme_dir/logo.png"
     }
     
     # Clean up

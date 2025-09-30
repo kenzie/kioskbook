@@ -612,19 +612,39 @@ EOF
         # Try multiple approaches for kernel installation
         local kernel_installed=false
         
-        # Approach 1: Try different kernel package names for Alpine 3.22
-        local kernel_packages=("linux-lts" "linux" "linux-edge" "linux-virt")
-        
-        for kernel_pkg in "${kernel_packages[@]}"; do
-            if ! $kernel_installed; then
-                log_info "Attempting to install $kernel_pkg..."
-                if chroot "$MOUNT_ROOT" apk add "$kernel_pkg" 2>/dev/null; then
-                    log_success "$kernel_pkg installed successfully"
-                    kernel_installed=true
-                    break
-                fi
+        # Approach 1: Try linux-virt first (minimal firmware for VMs)
+        if ! $kernel_installed; then
+            log_info "Attempting to install linux-virt (VM-optimized, minimal firmware)..."
+            if chroot "$MOUNT_ROOT" apk add linux-virt 2>/dev/null; then
+                log_success "linux-virt installed successfully (minimal firmware)"
+                kernel_installed=true
             fi
-        done
+        fi
+        
+        # Approach 2: Use package masking to exclude firmware bloat
+        if ! $kernel_installed; then
+            log_info "Using package masking to exclude firmware bloat..."
+            
+            # Create firmware mask to prevent installation
+            echo "linux-firmware" > "$MOUNT_ROOT/etc/apk/mask"
+            
+            if chroot "$MOUNT_ROOT" apk add linux-lts 2>/dev/null; then
+                log_success "linux-lts installed with firmware masked"
+                kernel_installed=true
+            else
+                # Remove mask if it didn't work
+                rm -f "$MOUNT_ROOT/etc/apk/mask"
+            fi
+        fi
+        
+        # Approach 3: Try --no-deps as last resort
+        if ! $kernel_installed; then
+            log_info "Attempting kernel with --no-deps (last resort)..."
+            if chroot "$MOUNT_ROOT" apk add --no-deps linux-lts 2>/dev/null; then
+                log_success "linux-lts installed with --no-deps"
+                kernel_installed=true
+            fi
+        fi
         
         # Approach 3: Try with different repository mirrors
         if ! $kernel_installed; then
@@ -678,6 +698,21 @@ EOF
             log_info "Available directories in $MOUNT_ROOT/lib:"
             ls -la "$MOUNT_ROOT/lib/" || true
             exit 1
+        fi
+        
+        # Install targeted firmware only if needed and hardware detected
+        log_info "Checking for hardware-specific firmware needs..."
+        
+        # Check for AMD GPU and install only AMD firmware if present
+        if lspci 2>/dev/null | grep -qi "amd\|radeon"; then
+            log_info "AMD GPU detected, installing AMD-specific firmware..."
+            chroot "$MOUNT_ROOT" apk add linux-firmware-amdgpu 2>/dev/null && {
+                log_success "AMD GPU firmware installed"
+            } || {
+                log_warning "AMD firmware installation failed (non-critical)"
+            }
+        else
+            log_info "No AMD GPU detected, skipping GPU firmware"
         fi
         
         # Wait a moment for filesystem to settle

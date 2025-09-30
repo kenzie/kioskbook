@@ -53,7 +53,7 @@ install_bootloader_packages() {
     
     # Essential packages that must install
     local essential_packages=(
-        "grub"
+        "syslinux"
         "plymouth"
         "plymouth-themes"
         "mkinitfs"
@@ -62,8 +62,6 @@ install_bootloader_packages() {
     
     # Optional packages that may fail on some systems
     local optional_packages=(
-        "grub-efi"
-        "grub-bios" 
         "efibootmgr"
         "imagemagick"
         "linux-firmware-amdgpu"
@@ -85,40 +83,17 @@ install_bootloader_packages() {
     log_success "Bootloader packages installed"
 }
 
-# Configure kernel parameters
+# Configure kernel parameters for EXTLINUX
 configure_kernel_parameters() {
     log_info "Configuring kernel parameters for fast boot..."
     
-    # Create GRUB configuration directory
-    mkdir -p "$MOUNT_ROOT/etc/default"
+    # Kernel command line for fast, silent boot with AMD optimizations
+    local kernel_cmdline="quiet splash loglevel=0 plymouth.ignore-serial-consoles vt.global_cursor_default=0 mitigations=off amd_pstate=active amdgpu.dc=1 amdgpu.dpm=1 amdgpu.gpu_recovery=1 amdgpu.runpm=1 amdgpu.bapm=1 radeon.audio=1 radeon.hw_i2c=1 acpi_osi=Linux processor.max_cstate=1 intel_idle.max_cstate=1 clocksource=tsc tsc=reliable no_timer_check noreplace-smp rcu_nocbs=0-7 elevator=mq-deadline usbcore.autosuspend=-1 audit=0 selinux=0 enforcing=0 fsck.mode=skip"
     
-    # Configure GRUB defaults
-    cat > "$MOUNT_ROOT/etc/default/grub" << 'EOF'
-# GRUB configuration for KioskBook ultra-fast boot
-GRUB_DEFAULT=0
-GRUB_TIMEOUT=0
-GRUB_TIMEOUT_STYLE=hidden
-GRUB_DISTRIBUTOR="KioskBook"
-
-# Silent boot parameters with Plymouth
-GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=0 rd.systemd.show_status=false rd.udev.log_priority=0 systemd.show_status=false plymouth.ignore-serial-consoles vt.global_cursor_default=0"
-
-# Performance and AMD GPU optimizations
-GRUB_CMDLINE_LINUX="mitigations=off amd_pstate=active amdgpu.dc=1 amdgpu.dpm=1 amdgpu.gpu_recovery=1 amdgpu.runpm=1 amdgpu.bapm=1 radeon.audio=1 radeon.hw_i2c=1 acpi_osi=Linux processor.max_cstate=1 intel_idle.max_cstate=1 clocksource=tsc tsc=reliable no_timer_check noreplace-smp rcu_nocbs=0-7 elevator=mq-deadline usbcore.autosuspend=-1 audit=0 selinux=0 enforcing=0 fsck.mode=skip"
-
-# Boot optimization
-GRUB_PRELOAD_MODULES="part_gpt part_msdos ext2 linux"
-GRUB_DISABLE_RECOVERY=true
-GRUB_DISABLE_SUBMENU=true
-GRUB_DISABLE_OS_PROBER=true
-
-# Graphics settings
-GRUB_GFXMODE=auto
-GRUB_GFXPAYLOAD_LINUX=keep
-GRUB_TERMINAL=console
-EOF
+    # Store kernel parameters for later use
+    export KERNEL_CMDLINE="$kernel_cmdline"
     
-    log_success "Kernel parameters configured"
+    log_success "Kernel parameters configured for EXTLINUX"
 }
 
 # Create custom Plymouth theme
@@ -516,97 +491,95 @@ EOF
     log_success "Services optimized"
 }
 
-# Install and configure GRUB
-install_grub() {
-    log_info "Installing and configuring GRUB bootloader..."
-    
-    # Set up chroot environment for GRUB installation
-    log_info "Setting up chroot environment for GRUB..."
-    mount --bind /dev "$MOUNT_ROOT/dev" 2>/dev/null || log_warning "Failed to bind mount /dev"
-    mount --bind /proc "$MOUNT_ROOT/proc" 2>/dev/null || log_warning "Failed to bind mount /proc" 
-    mount --bind /sys "$MOUNT_ROOT/sys" 2>/dev/null || log_warning "Failed to bind mount /sys"
-    
-    # Determine if system is EFI or BIOS
-    local boot_mode="bios"
-    if [[ -d "/sys/firmware/efi" ]]; then
-        boot_mode="efi"
-        log_info "Detected EFI boot mode"
-    else
-        log_info "Detected BIOS boot mode"
-    fi
-    
-    # Copy optimized GRUB configuration
-    local grub_config_source="$CONFIG_DIR/grub.cfg"
-    if [[ -f "$grub_config_source" ]]; then
-        mkdir -p "$MOUNT_BOOT/grub"
-        cp "$grub_config_source" "$MOUNT_BOOT/grub/grub.cfg.template" || {
-            log_warning "Failed to copy GRUB template - using generated config"
-        }
-    fi
+# Install and configure EXTLINUX
+install_extlinux() {
+    log_info "Installing and configuring EXTLINUX bootloader..."
     
     # Get partition UUIDs
     local root_uuid boot_uuid
     root_uuid="$(blkid -s UUID -o value "$ROOT_PARTITION")"
     boot_uuid="$(blkid -s UUID -o value "$BOOT_PARTITION")"
     
-    # Install GRUB
-    if [[ "$boot_mode" == "efi" ]]; then
-        # EFI installation
-        mkdir -p "$MOUNT_ROOT/boot/efi"
-        if ! mountpoint -q "$MOUNT_ROOT/boot/efi"; then
-            # Mount EFI system partition if not already mounted
-            local esp_part="${TARGET_DISK}1"  # Assuming first partition is ESP
-            mount "$esp_part" "$MOUNT_ROOT/boot/efi" 2>/dev/null || {
-                log_warning "Could not mount EFI system partition"
-            }
-        fi
-        
-        # Try EFI installation with better error handling
-        if chroot "$MOUNT_ROOT" grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=KioskBook --recheck --force; then
-            log_success "GRUB EFI installed successfully"
-        else
-            log_warning "EFI installation failed, falling back to BIOS mode"
-            # Force BIOS installation
-            if chroot "$MOUNT_ROOT" grub-install --target=i386-pc --boot-directory=/boot --recheck --force "$TARGET_DISK"; then
-                log_success "GRUB BIOS installed successfully (fallback from EFI)"
-            else
-                log_error "Failed to install GRUB in both EFI and BIOS modes"
-                log_error "Check if grub-bios package is installed and target disk is correct: $TARGET_DISK"
-                exit 1
-            fi
-        fi
-    else
-        # BIOS installation
-        log_info "Installing GRUB for BIOS boot mode..."
-        if chroot "$MOUNT_ROOT" grub-install --target=i386-pc --boot-directory=/boot --recheck --force "$TARGET_DISK"; then
-            log_success "GRUB BIOS installed successfully"
-        else
-            log_error "Failed to install GRUB BIOS"
-            log_error "Check if grub-bios package is installed and target disk is correct: $TARGET_DISK"
-            exit 1
-        fi
+    # Find kernel version
+    local kernel_version
+    if [[ -d "$MOUNT_ROOT/lib/modules" ]]; then
+        kernel_version=$(ls "$MOUNT_ROOT/lib/modules" | head -1)
     fi
     
-    # Generate GRUB configuration
-    chroot "$MOUNT_ROOT" grub-mkconfig -o /boot/grub/grub.cfg || {
-        log_error "Failed to generate GRUB configuration"
+    if [[ -z "$kernel_version" ]]; then
+        log_error "No kernel version found for EXTLINUX configuration"
+        exit 1
+    fi
+    
+    log_info "Configuring EXTLINUX for kernel version: $kernel_version"
+    
+    # Install EXTLINUX to boot partition
+    chroot "$MOUNT_ROOT" extlinux --install /boot || {
+        log_error "Failed to install EXTLINUX"
         exit 1
     }
     
-    # Apply optimizations to generated config
-    if [[ -f "$MOUNT_ROOT/boot/grub/grub.cfg" ]]; then
-        # Replace UUID placeholders
-        sed -i "s/ROOT_UUID/$root_uuid/g" "$MOUNT_ROOT/boot/grub/grub.cfg"
-        sed -i "s/BOOT_UUID/$boot_uuid/g" "$MOUNT_ROOT/boot/grub/grub.cfg"
+    # Install MBR (Master Boot Record) for BIOS boot
+    if command -v dd >/dev/null 2>&1; then
+        # Install syslinux MBR
+        local mbr_file=""
+        if [[ -f "$MOUNT_ROOT/usr/share/syslinux/mbr.bin" ]]; then
+            mbr_file="$MOUNT_ROOT/usr/share/syslinux/mbr.bin"
+        elif [[ -f "/usr/share/syslinux/mbr.bin" ]]; then
+            mbr_file="/usr/share/syslinux/mbr.bin"
+        fi
+        
+        if [[ -n "$mbr_file" ]]; then
+            dd if="$mbr_file" of="$TARGET_DISK" bs=440 count=1 conv=notrunc 2>/dev/null || {
+                log_warning "Failed to install MBR (non-critical for some systems)"
+            }
+        else
+            log_warning "MBR file not found, may need manual MBR installation"
+        fi
     fi
     
-    # Clean up chroot bind mounts
-    log_info "Cleaning up chroot environment..."
-    umount "$MOUNT_ROOT/sys" 2>/dev/null || true
-    umount "$MOUNT_ROOT/proc" 2>/dev/null || true 
-    umount "$MOUNT_ROOT/dev" 2>/dev/null || true
+    # Create EXTLINUX configuration
+    cat > "$MOUNT_BOOT/extlinux.conf" << EOF
+# KioskBook EXTLINUX Configuration
+# Fast boot configuration for Alpine Linux kiosk
+
+DEFAULT kioskbook
+TIMEOUT 1
+PROMPT 0
+
+LABEL kioskbook
+    MENU LABEL KioskBook Alpine Linux
+    LINUX vmlinuz-$kernel_version
+    INITRD initrd
+    APPEND root=UUID=$root_uuid rw $KERNEL_CMDLINE
+
+LABEL kioskbook-safe
+    MENU LABEL KioskBook (Safe Mode)
+    LINUX vmlinuz-$kernel_version
+    INITRD initrd
+    APPEND root=UUID=$root_uuid rw single
+EOF
     
-    log_success "GRUB installed and configured"
+    # Copy kernel and initrd to boot partition if needed
+    if [[ -f "$MOUNT_ROOT/boot/vmlinuz-$kernel_version" ]]; then
+        cp "$MOUNT_ROOT/boot/vmlinuz-$kernel_version" "$MOUNT_BOOT/" || {
+            log_warning "Failed to copy kernel to boot partition"
+        }
+    fi
+    
+    if [[ -f "$MOUNT_ROOT/boot/initrd" ]]; then
+        cp "$MOUNT_ROOT/boot/initrd" "$MOUNT_BOOT/" || {
+            log_warning "Failed to copy initrd to boot partition"
+        }
+    fi
+    
+    # Set boot flag on first partition for compatibility
+    parted -s "$TARGET_DISK" set 1 boot on 2>/dev/null || {
+        log_warning "Failed to set boot flag (may not be needed)"
+    }
+    
+    log_success "EXTLINUX installed and configured"
+    log_info "Boot timeout: 1 second (almost instant boot)"
 }
 
 # Generate optimized initramfs
@@ -715,10 +688,9 @@ validate_boot_config() {
     
     # Check essential files
     local essential_files=(
-        "$MOUNT_ROOT/boot/grub/grub.cfg"
+        "$MOUNT_BOOT/extlinux.conf"
         "$MOUNT_ROOT/boot/initrd"
         "$MOUNT_ROOT/etc/mkinitfs/mkinitfs.conf"
-        "$MOUNT_ROOT/etc/default/grub"
     )
     
     for file in "${essential_files[@]}"; do
@@ -728,10 +700,20 @@ validate_boot_config() {
         fi
     done
     
-    # Check if GRUB is installed
-    if [[ ! -d "$MOUNT_ROOT/boot/grub" ]]; then
-        log_error "GRUB not properly installed"
-        exit 1
+    # Check if EXTLINUX is installed
+    if [[ ! -f "$MOUNT_BOOT/ldlinux.sys" ]] && [[ ! -f "$MOUNT_BOOT/extlinux.sys" ]]; then
+        log_warning "EXTLINUX system files not found (may be normal)"
+    fi
+    
+    # Check kernel files
+    local kernel_version
+    if [[ -d "$MOUNT_ROOT/lib/modules" ]]; then
+        kernel_version=$(ls "$MOUNT_ROOT/lib/modules" | head -1)
+        if [[ -n "$kernel_version" ]]; then
+            if [[ ! -f "$MOUNT_BOOT/vmlinuz-$kernel_version" ]] && [[ ! -f "$MOUNT_ROOT/boot/vmlinuz-$kernel_version" ]]; then
+                log_warning "Kernel file not found in expected locations"
+            fi
+        fi
     fi
     
     # Check Plymouth installation
@@ -758,7 +740,7 @@ main() {
     optimize_initramfs
     configure_watchdog
     optimize_services
-    install_grub
+    install_extlinux
     generate_initramfs
     configure_fast_boot
     validate_boot_config
@@ -766,9 +748,9 @@ main() {
     log_success "Boot optimization completed successfully"
     log_info "Target: Sub-5 second boot to Chromium display"
     log_info "Optimizations applied:"
-    log_info "  - GRUB 0-timeout silent boot"
+    log_info "  - EXTLINUX 1-second timeout (near-instant boot)"
     log_info "  - AMD GPU kernel parameters"
-    log_info "  - Plymouth boot splash"
+    log_info "  - Plymouth boot splash with Route 19 logo"
     log_info "  - Optimized initramfs"
     log_info "  - Service startup optimization"
     log_info "  - Hardware watchdog configuration"

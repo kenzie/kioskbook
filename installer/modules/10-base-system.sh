@@ -410,30 +410,11 @@ EOF
 prepare_bootloader() {
     log_info "Preparing bootloader configuration..."
     
-    # Install bootloader packages
-    apk --root "$MOUNT_ROOT" add grub grub-efi efibootmgr || {
-        log_error "Failed to install bootloader packages"
-        exit 1
-    }
+    # EXTLINUX will be installed and configured by the boot optimization module
+    # No preparation needed here - just ensure boot directory exists
+    mkdir -p "$MOUNT_ROOT/boot"
     
-    # Create GRUB configuration directory
-    mkdir -p "$MOUNT_ROOT/etc/default"
-    
-    # Configure GRUB for fast boot
-    cat > "$MOUNT_ROOT/etc/default/grub" << 'EOF'
-# GRUB configuration for fast boot
-GRUB_DEFAULT=0
-GRUB_TIMEOUT=0
-GRUB_TIMEOUT_STYLE=hidden
-GRUB_DISTRIBUTOR="KioskBook"
-GRUB_CMDLINE_LINUX_DEFAULT="quiet splash ro"
-GRUB_CMDLINE_LINUX=""
-GRUB_PRELOAD_MODULES="part_gpt part_msdos"
-GRUB_DISABLE_RECOVERY=true
-GRUB_DISABLE_SUBMENU=true
-EOF
-    
-    log_success "Bootloader preparation completed"
+    log_success "Bootloader preparation completed (EXTLINUX will be configured later)"
 }
 
 # Validate installation

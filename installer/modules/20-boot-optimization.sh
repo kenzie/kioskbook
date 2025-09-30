@@ -597,10 +597,19 @@ generate_initramfs() {
         # Ensure proper repository configuration and update cache
         log_info "Updating package cache and fixing repository configuration..."
         
-        # Force repository reconfiguration for Alpine 3.22
-        cat > "$MOUNT_ROOT/etc/apk/repositories" << 'EOF'
-http://dl-cdn.alpinelinux.org/alpine/v3.22/main
-http://dl-cdn.alpinelinux.org/alpine/v3.22/community
+        # Detect actual Alpine version and configure repositories
+        local alpine_version
+        if [[ -f "/etc/alpine-release" ]]; then
+            alpine_version="v$(cat /etc/alpine-release | cut -d. -f1,2)"
+            log_info "Detected host Alpine version: $alpine_version"
+        else
+            alpine_version="v3.19"  # Safe fallback
+            log_warning "Could not detect Alpine version, using $alpine_version"
+        fi
+        
+        cat > "$MOUNT_ROOT/etc/apk/repositories" << EOF
+http://dl-cdn.alpinelinux.org/alpine/${alpine_version}/main
+http://dl-cdn.alpinelinux.org/alpine/${alpine_version}/community
 EOF
         
         # Clear and rebuild package cache

@@ -96,6 +96,34 @@ setup_networking() {
     fi
 }
 
+# Configure Alpine package repositories
+configure_repositories() {
+    log "Configuring Alpine package repositories..."
+    
+    # Check if repositories are properly configured (not pointing to CD-ROM)
+    if grep -q "/media/cdrom" /etc/apk/repositories 2>/dev/null; then
+        log "CD-ROM repositories detected, configuring online repositories..."
+        
+        # Backup existing repositories
+        cp /etc/apk/repositories /etc/apk/repositories.backup 2>/dev/null || true
+        
+        # Configure proper online repositories
+        cat > /etc/apk/repositories << 'EOF'
+http://dl-cdn.alpinelinux.org/alpine/v3.19/main
+http://dl-cdn.alpinelinux.org/alpine/v3.19/community
+EOF
+        log_success "Repositories configured to use online mirrors"
+        
+    elif ! grep -q "community" /etc/apk/repositories 2>/dev/null; then
+        log "Community repository not enabled, adding..."
+        echo "http://dl-cdn.alpinelinux.org/alpine/v3.19/community" >> /etc/apk/repositories
+        log_success "Community repository enabled"
+        
+    else
+        log "Repositories already properly configured"
+    fi
+}
+
 # Update package repositories
 update_repositories() {
     log "Updating Alpine package repositories..."
@@ -109,8 +137,30 @@ update_repositories() {
         fi
     fi
     
-    apk update || error_exit "Failed to update package repositories"
-    log_success "Package repositories updated"
+    # Try to update repositories, with fallback to alternative mirrors
+    if ! apk update; then
+        log_warning "Failed to update with primary mirrors, trying alternatives..."
+        
+        # Try alternative mirrors
+        cat > /etc/apk/repositories << 'EOF'
+http://mirror.leaseweb.com/alpine/v3.19/main
+http://mirror.leaseweb.com/alpine/v3.19/community
+EOF
+        
+        if apk update; then
+            log_success "Package repositories updated using alternative mirrors"
+        else
+            # Try HTTPS mirrors as last resort
+            cat > /etc/apk/repositories << 'EOF'
+https://alpine.global.ssl.fastly.net/alpine/v3.19/main
+https://alpine.global.ssl.fastly.net/alpine/v3.19/community
+EOF
+            apk update || error_exit "Failed to update package repositories with all available mirrors"
+            log_success "Package repositories updated using HTTPS mirrors"
+        fi
+    else
+        log_success "Package repositories updated"
+    fi
 }
 
 # Install required packages
@@ -233,6 +283,7 @@ main() {
     # Perform bootstrap steps
     check_root
     setup_networking
+    configure_repositories
     update_repositories
     install_packages
     clone_repository

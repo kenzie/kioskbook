@@ -269,12 +269,17 @@ configure_plymouth() {
     log_info "Configuring Plymouth boot splash..."
     
     # Set Route 19 Plymouth theme
-    chroot "$MOUNT_ROOT" plymouth-set-default-theme route19 || {
-        log_warning "Failed to set Route 19 theme, falling back to spinner"
-        chroot "$MOUNT_ROOT" plymouth-set-default-theme spinner || {
-            log_warning "Failed to set any Plymouth theme"
+    if chroot "$MOUNT_ROOT" command -v plymouth-set-default-theme >/dev/null 2>&1; then
+        chroot "$MOUNT_ROOT" plymouth-set-default-theme route19 || {
+            log_warning "Failed to set Route 19 theme, falling back to spinner"
+            chroot "$MOUNT_ROOT" plymouth-set-default-theme spinner || {
+                log_warning "Failed to set any Plymouth theme - continuing without theme"
+            }
         }
-    }
+    else
+        log_warning "plymouth-set-default-theme not available - Plymouth may not be properly installed"
+        log_info "Boot splash will use default configuration"
+    fi
     
     # Add Plymouth to initramfs features
     if [[ -f "$MOUNT_ROOT/etc/mkinitfs/mkinitfs.conf" ]]; then
@@ -508,8 +513,6 @@ EOF
         "modules:boot"
         "localmount:boot"
         "hostname:boot"
-        "kiosk-app:default"
-        "kiosk-display:default"
     )
     
     for service_entry in "${service_order[@]}"; do
@@ -540,7 +543,10 @@ install_grub() {
     # Copy optimized GRUB configuration
     local grub_config_source="$CONFIG_DIR/grub.cfg"
     if [[ -f "$grub_config_source" ]]; then
-        cp "$grub_config_source" "$MOUNT_BOOT/grub/grub.cfg.template"
+        mkdir -p "$MOUNT_BOOT/grub"
+        cp "$grub_config_source" "$MOUNT_BOOT/grub/grub.cfg.template" || {
+            log_warning "Failed to copy GRUB template - using generated config"
+        }
     fi
     
     # Get partition UUIDs
@@ -560,10 +566,15 @@ install_grub() {
             }
         fi
         
-        chroot "$MOUNT_ROOT" grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=KioskBook --recheck || {
-            log_error "Failed to install GRUB EFI"
-            exit 1
-        }
+        if chroot "$MOUNT_ROOT" grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=KioskBook --recheck; then
+            log_success "GRUB EFI installed successfully"
+        else
+            log_warning "EFI installation failed, falling back to BIOS mode"
+            chroot "$MOUNT_ROOT" grub-install --target=i386-pc --recheck "$TARGET_DISK" || {
+                log_error "Failed to install GRUB in both EFI and BIOS modes"
+                exit 1
+            }
+        fi
     else
         # BIOS installation
         chroot "$MOUNT_ROOT" grub-install --target=i386-pc --recheck "$TARGET_DISK" || {

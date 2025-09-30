@@ -8,83 +8,104 @@ KioskBook is a bulletproof kiosk deployment platform for Lenovo M75q-1 hardware.
 
 ## Architecture
 
-### Single-Script In-Place Installation
+### Modular Alpine Linux Installation
 
-The core of KioskBook is `install.sh`, a comprehensive installation script that transforms an existing minimal Debian installation into a fully functional kiosk system.
+The core of KioskBook is a modular installer system built on Alpine Linux, consisting of `bootstrap.sh` and `main.sh` with specialized modules that transform a minimal Alpine installation into a bulletproof kiosk system.
 
 **Prerequisites:**
-- Debian 13 (trixie) installed
-- Node.js and npm pre-installed
+- Alpine Linux Live USB or minimal installation
 - Root access
-- Internet connectivity
+- Internet connectivity (configured automatically if needed)
 
 **Installation Flow:**
-1. Configuration input (GitHub repo, Tailscale key)
-2. System verification (prerequisites, hardware, network)
-3. Boot optimization (GRUB timeout=0, disable unnecessary services)
-4. Display stack installation (X11, Chromium, AMD drivers)
-5. Kiosk user creation with auto-login and X11 auto-start
-6. Application setup (clone, build, systemd service)
-7. Tailscale VPN installation and authentication
-8. Monitoring and recovery configuration
-9. Finalization and optional reboot
+1. **Bootstrap Phase** (`bootstrap.sh`): Network setup, package manager configuration, repository cloning
+2. **Partition Module** (`00-partition.sh`): Disk partitioning and filesystem setup
+3. **Base System** (`10-base-system.sh`): Core Alpine packages and system configuration
+4. **Boot Optimization** (`20-boot-optimization.sh`): GRUB/syslinux with Plymouth silent boot
+5. **Font Installation** (`25-fonts.sh`): Inter and CaskaydiaCove Nerd Font with fontconfig
+6. **Display Stack** (`30-display.sh`): X11, Chromium, AMD drivers, kiosk user setup
+7. **Application Setup** (`50-application.sh`): Node.js app deployment and systemd services
+8. **Monitoring & Recovery** (`70-monitoring.sh`): Health checks, auto-recovery, remote access
 
 ### System Components
 
-- **Base OS**: Debian 13 (trixie) - minimal installation
-- **Display Server**: X11 with xserver-xorg-video-amdgpu (no desktop environment)
+- **Base OS**: Alpine Linux (minimal, security-focused)
+- **Init System**: OpenRC with systemd compatibility layer
+- **Display Server**: X11 with Mesa AMD drivers (no desktop environment)
 - **Browser**: Chromium in kiosk mode (full-screen, no UI elements)
 - **Runtime**: Node.js 22.x + npm
 - **Application**: Vue.js web application (served on port 3000)
 - **Remote Access**: Tailscale VPN + SSH
-- **User**: Auto-login kiosk user with X11 auto-start
+- **Boot**: Plymouth silent boot with Route 19 logo
+- **Fonts**: Inter (UI) + CaskaydiaCove Nerd Font (monospace)
 
 ### Key Design Principles
 
-1. **Single Script Execution**: Entire installation in one `install.sh` run
-2. **Fast Boot**: <10 second boot time (network-independent)
-3. **Self-Recovery**: Automatic restart of failed services
+1. **Modular Installation**: Bootstrap + modular installer system for maintainability
+2. **Fast Boot**: <5 second boot time with Plymouth silent boot (Route 19 logo only)
+3. **Self-Recovery**: Multi-layer recovery (service, application, system level)
 4. **Offline-First**: Must work without network using cached JSON data
-5. **Minimal Surface**: Minimal Linux installation for security and performance
+5. **Minimal Surface**: Alpine Linux minimal installation for security and performance
 6. **Unattended Operation**: Designed for months without physical access
+7. **Silent Operation**: No boot text, only Route 19 logo on black background
 
 ## Common Commands
 
 ### Installation
 ```bash
-git clone https://github.com/kenzie/kioskbook.git
-cd kioskbook
-bash install.sh
+# Boot from Alpine Linux Live USB
+# Download and run bootstrap
+wget -O - https://raw.githubusercontent.com/kenzie/kioskbook/alpine-rewrite/installer/bootstrap.sh | ash
+
+# Or manually:
+git clone -b alpine-rewrite https://github.com/kenzie/kioskbook.git
+cd kioskbook/installer
+ash bootstrap.sh
+bash main.sh [github_repo] [tailscale_key]
 ```
 
 ### Management
 ```bash
-# Check service status
+# Check service status (OpenRC)
+rc-status kiosk-app
+rc-status tailscaled
+
+# Check services (systemd compatibility)
 systemctl status kiosk-app
 systemctl status tailscaled
 
 # View logs
 journalctl -u kiosk-app -f
+tail -f /var/log/kiosk-app.log
 
 # Restart services
+rc-service kiosk-app restart
 systemctl restart kiosk-app
 
 # Health check
-/opt/kiosk-health-check.sh
+/usr/local/bin/kiosk-health-check
 
 # Update application
-cd /opt/kiosk-app && git pull && npm install && systemctl restart kiosk-app
+cd /opt/kiosk-app && git pull && npm install && rc-service kiosk-app restart
+
+# Font management
+font-status
+update-fonts
+
+# Boot validation
+/opt/kioskbook/bin/validate-boot.sh
 ```
 
 ### Development/Testing
-When developing the install script, test on Debian 13 (trixie) with hardware that matches the Lenovo M75q-1 specs (AMD-based, NVMe SSD).
+When developing the installer, test on Alpine Linux (latest) with hardware that matches the Lenovo M75q-1 specs (AMD-based, NVMe SSD). Use UTM on macOS for development testing.
 
 ## Critical Requirements
 
 ### Performance Targets
-- Boot time: <10 seconds from power on to application display
+- Boot time: <5 seconds from power on to application display (silent boot with Route 19 logo)
 - Recovery time: <30 seconds for automatic service recovery
 - Uptime: Designed for months of unattended operation
+- Font rendering: Optimized Inter + CaskaydiaCove with subpixel antialiasing
 
 ### Hardware Target
 - Primary: Lenovo M75q-1 (AMD-based mini PC)
@@ -96,8 +117,9 @@ When developing the install script, test on Debian 13 (trixie) with hardware tha
 ### Security Model
 - Physical access assumed controlled
 - Tailscale VPN for remote access
-- Minimal installation surface
-- Automatic security patches enabled
+- Alpine Linux minimal installation surface (security-focused)
+- Automatic security patches enabled via apk
+- OpenRC init system (simpler than systemd)
 
 ## Application Integration
 
@@ -122,35 +144,60 @@ The kiosk system is designed to run Vue.js applications. Default application rep
 - Git-based update mechanism for applications
 - Centralized logging for troubleshooting
 
-## Installation Script Development
+## Installation System Development
 
-When working on `install.sh`:
+The Alpine rewrite uses a modular installer system:
 
-1. **Prerequisites**: Assumes Debian 13 + Node.js/npm already installed
-2. **Idempotency**: Script sections should be safe to re-run
-3. **Error Handling**: Check success of critical operations (set -e for fail-fast)
-4. **Minimal Prompts**: Only GitHub repo and Tailscale key required
-5. **Boot Optimization**: GRUB timeout=0, disable unnecessary services
-6. **Auto-login**: Kiosk user auto-login on tty1, X11 auto-start via .bash_profile
-7. **Systemd Services**: kiosk-app.service with auto-restart enabled
-8. **Progress Display**: Color-coded output with clear phase indicators
+### Bootstrap Script (`bootstrap.sh`)
+1. **POSIX sh compatibility**: Uses Alpine's busybox shell
+2. **Network configuration**: Automatic setup if needed
+3. **Package manager**: Configure Alpine package repositories
+4. **Repository cloning**: Download installer modules
+
+### Main Installer (`main.sh`) 
+1. **Modular execution**: Each phase is a separate module
+2. **Error handling**: Comprehensive rollback on failure (set -e)
+3. **Minimal prompts**: Only GitHub repo and Tailscale key required
+4. **Progress display**: Color-coded output with clear phase indicators
+
+### Module Development Guidelines
+1. **00-partition.sh**: Disk partitioning with persistent data partition
+2. **10-base-system.sh**: Core Alpine packages and system configuration
+3. **20-boot-optimization.sh**: Silent boot with Plymouth Route 19 theme
+4. **25-fonts.sh**: Inter and CaskaydiaCove font installation with fontconfig
+5. **30-display.sh**: X11, Chromium, kiosk user with auto-login
+6. **50-application.sh**: Node.js app deployment and service configuration
+7. **70-monitoring.sh**: Health checks, recovery, and remote access
 
 ## Testing Validation
 
 After installation, validate:
-- [ ] System boots in <10 seconds
+- [ ] System boots in <5 seconds with only Route 19 logo visible
 - [ ] Application displays full-screen automatically
 - [ ] SSH access works
 - [ ] Tailscale VPN connectivity established
 - [ ] Application works offline with cached data
-- [ ] Services auto-restart on failure
+- [ ] Services auto-restart on failure (OpenRC + systemd compatibility)
+- [ ] Inter font used for UI, CaskaydiaCove for monospace
+- [ ] Silent boot (no kernel messages, only Route 19 logo)
+
+## Development Tools
+
+### Testing Environments
+- **UTM on macOS**: Use `tools/utm-setup.md` for VM testing
+- **QEMU**: Use `tools/test-vm.sh` for cross-platform testing
+- **Physical Hardware**: Lenovo M75q-1 for final validation
+
+### Useful Scripts
+- **USB Creation**: `tools/build-usb.sh` for bootable Alpine installer
+- **Boot Validation**: `config/boot/validate-boot-config.sh`
+- **Font Status**: `font-status` and `update-fonts` commands
 
 ## Deployment Target
 
 The installation assumes:
-- Existing Debian 13 (trixie) minimal installation
-- Node.js and npm pre-installed (v22.x tested)
-- Ethernet connectivity during installation
+- Alpine Linux Live USB or minimal installation
+- Internet connectivity during installation (configured automatically)
 - Target hardware is Lenovo M75q-1 or compatible AMD-based system
 - Root access available
-- No disk wiping (works on running system)
+- Complete disk installation (not in-place upgrade)

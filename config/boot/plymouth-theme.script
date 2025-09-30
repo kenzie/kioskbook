@@ -1,0 +1,31 @@
+# Route 19 Plymouth Theme Script
+# Silent boot splash with centered logo on black background
+
+# Set background to pure black
+Window.SetBackgroundTopColor(0, 0, 0);
+Window.SetBackgroundBottomColor(0, 0, 0);
+
+# Load Route 19 logo
+logo_image = Image("route19-logo.png");
+logo_sprite = Sprite(logo_image);
+
+# Center the logo on screen
+screen_width = Window.GetWidth();
+screen_height = Window.GetHeight();
+logo_width = logo_image.GetWidth();
+logo_height = logo_image.GetHeight();
+
+# Calculate center position
+logo_x = (screen_width - logo_width) / 2;
+logo_y = (screen_height - logo_height) / 2;
+
+# Position the logo sprite
+logo_sprite.SetPosition(logo_x, logo_y, 0);
+
+# Hide all text and progress indicators
+Plymouth.SetFunction("DisplayMessage", fun(){});
+Plymouth.SetFunction("DisplayNormalMessage", fun(){});
+Plymouth.SetFunction("DisplayPasswordMessage", fun(){});
+Plymouth.SetFunction("DisplayQuestionMessage", fun(){});
+Plymouth.SetFunction("RefreshFunction", fun(){});
+Plymouth.SetFunction("BootProgressFunction", fun(){});

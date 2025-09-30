@@ -1,0 +1,13 @@
+#!/bin/sh
+#
+# KioskBook X11 Initialization Script
+#
+# X11 startup script for kiosk user. Launches Chromium in kiosk mode
+# and manages the display session.
+#
+
+# TODO: X11 session configuration
+# - Set display environment
+# - Configure window manager (if needed)
+# - Launch Chromium in kiosk mode
+# - Handle session management

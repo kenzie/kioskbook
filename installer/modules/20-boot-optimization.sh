@@ -152,14 +152,10 @@ if command -v convert >/dev/null 2>&1; then
             -background black \
             -gravity center \
             -extent 1920x1080 \
-            "/etc/splash/route19/background.png"
-    
-    # Create a copy for boot splash
-    cp "/etc/splash/route19/background.png" "/boot/splash.png"
+            "/usr/share/plymouth/themes/route19/logo.png"
 else
     echo "ImageMagick not available, using logo as-is..."
-    cp "./route19-logo.png" "/etc/splash/route19/background.png"
-    cp "./route19-logo.png" "/boot/splash.png"
+    cp "./route19-logo.png" "/usr/share/plymouth/themes/route19/logo.png"
 fi
 
 echo "Route 19 splash theme created successfully"
@@ -172,42 +168,97 @@ EOF
         log_warning "Failed to create Route 19 logo, using fallback"
         # Create minimal fallback
         mkdir -p "$theme_dir"
-        echo -e "\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\x98\x81\x81\x81\x81\x81\x01\x00\x00\x05\x00\x01\r\n-\xdb\x00\x00\x00\x00IEND\xaeB\x60\x82" > "$theme_dir/background.png"
-        cp "$theme_dir/background.png" "$MOUNT_BOOT/splash.png"
+        echo -e "\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\x98\x81\x81\x81\x81\x81\x01\x00\x00\x05\x00\x01\r\n-\xdb\x00\x00\x00\x00IEND\xaeB\x60\x82" > "$theme_dir/logo.png"
+        # No need to copy to /boot for Plymouth
     }
     
     # Clean up
     rm -f "$MOUNT_ROOT/tmp/create_route19_logo.sh"
     
-    # Create fbsplash theme configuration
-    cat > "$theme_dir/fbsplash.conf" << 'EOF'
-# Route 19 fbsplash theme configuration
-pic=background.png
-silentpic=background.png
+    # Create Plymouth theme configuration
+    cat > "$theme_dir/route19.plymouth" << 'EOF'
+[Plymouth Theme]
+Name=Route 19
+Description=Route 19 Kiosk Boot Theme
+ModuleName=script
 
-# Theme colors (not used with custom image)
-bgcolor=0
-tx=0
-ty=0
-tw=0
-th=0
-
-# Progress bar settings (disabled for clean logo display)
-box silent noover 0 0 0 0 #000000
-box silent inter 0 0 0 0 #000000
-box silent 0 0 0 0 #000000
+[script]
+ImageDir=/usr/share/plymouth/themes/route19
+ScriptFile=/usr/share/plymouth/themes/route19/route19.script
 EOF
     
-    log_success "Route 19 fbsplash theme created"
+    # Create the Plymouth script for logo display
+    cat > "$theme_dir/route19.script" << 'EOF'
+# Route 19 Plymouth Theme Script
+# Simple logo display on black background
+
+# Set background to black
+Window.SetBackgroundTopColor(0, 0, 0);
+Window.SetBackgroundBottomColor(0, 0, 0);
+
+# Load and display the Route 19 logo
+logo.image = Image("logo.png");
+logo.sprite = Sprite(logo.image);
+
+# Center the logo on screen
+screen_width = Window.GetWidth();
+screen_height = Window.GetHeight();
+logo.sprite.SetX((screen_width - logo.image.GetWidth()) / 2);
+logo.sprite.SetY((screen_height - logo.image.GetHeight()) / 2);
+
+# Hide progress bar and messages for clean display
+Plymouth.SetDisplayNormalMode();
+
+# Function called on refresh - keep logo visible
+fun refresh_callback() {
+    # Keep logo centered and visible
+    logo.sprite.SetOpacity(1);
+}
+
+Plymouth.SetRefreshFunction(refresh_callback);
+
+# Hide any boot messages
+fun display_normal_callback() {
+    # Hide all text messages
+}
+
+Plymouth.SetDisplayNormalFunction(display_normal_callback);
+
+# Hide password prompts (not applicable for kiosk)
+fun display_password_callback() {
+    # No password display for kiosk
+}
+
+Plymouth.SetDisplayPasswordFunction(display_password_callback);
+
+# Hide questions (not applicable for kiosk)  
+fun display_question_callback() {
+    # No questions for kiosk
+}
+
+Plymouth.SetDisplayQuestionFunction(display_question_callback);
+
+# Hide messages
+fun display_message_callback() {
+    # No messages displayed
+}
+
+Plymouth.SetDisplayMessageFunction(display_message_callback);
+EOF
+    
+    log_success "Route 19 Plymouth theme created"
 }
 
 # Configure Plymouth
 configure_plymouth() {
     log_info "Configuring Plymouth boot splash..."
     
-    # Set default Plymouth theme
-    chroot "$MOUNT_ROOT" plymouth-set-default-theme spinner || {
-        log_warning "Failed to set Plymouth theme, using default"
+    # Set Route 19 Plymouth theme
+    chroot "$MOUNT_ROOT" plymouth-set-default-theme route19 || {
+        log_warning "Failed to set Route 19 theme, falling back to spinner"
+        chroot "$MOUNT_ROOT" plymouth-set-default-theme spinner || {
+            log_warning "Failed to set any Plymouth theme"
+        }
     }
     
     # Add Plymouth to initramfs features

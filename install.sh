@@ -234,7 +234,7 @@ run_modules() {
         "30-tailscale"
         "40-vue-app"
         "50-kiosk-services"
-        "60-boot-splash"
+        "60-minimal-boot"
         "70-health-monitoring"
         "80-auto-updates"
         "90-screensaver"

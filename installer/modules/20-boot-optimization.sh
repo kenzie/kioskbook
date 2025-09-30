@@ -594,8 +594,17 @@ generate_initramfs() {
     if [[ ! -d "$MOUNT_ROOT/lib/modules" ]]; then
         log_warning "Kernel modules directory not found, installing kernel..."
         
-        # Update package cache first to avoid temporary errors
-        log_info "Updating package cache to avoid repository errors..."
+        # Ensure proper repository configuration and update cache
+        log_info "Updating package cache and fixing repository configuration..."
+        
+        # Force repository reconfiguration for Alpine 3.22
+        cat > "$MOUNT_ROOT/etc/apk/repositories" << 'EOF'
+http://dl-cdn.alpinelinux.org/alpine/v3.22/main
+http://dl-cdn.alpinelinux.org/alpine/v3.22/community
+EOF
+        
+        # Clear and rebuild package cache
+        chroot "$MOUNT_ROOT" rm -rf /var/cache/apk/*
         chroot "$MOUNT_ROOT" apk update || {
             log_warning "Failed to update package cache"
         }

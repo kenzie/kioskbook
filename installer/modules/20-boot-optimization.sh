@@ -613,13 +613,46 @@ install_grub() {
 generate_initramfs() {
     log_info "Generating optimized initramfs..."
     
+    # Check if kernel modules directory exists
+    if [[ ! -d "$MOUNT_ROOT/lib/modules" ]]; then
+        log_warning "Kernel modules directory not found, installing kernel packages..."
+        # Ensure kernel packages are installed
+        chroot "$MOUNT_ROOT" apk add linux-lts linux-firmware || {
+            log_error "Failed to install kernel packages"
+            exit 1
+        }
+        
+        # Wait a moment for filesystem to settle
+        sleep 2
+    fi
+    
+    # Find kernel version
+    local kernel_version
+    if [[ -d "$MOUNT_ROOT/lib/modules" ]]; then
+        kernel_version=$(ls "$MOUNT_ROOT/lib/modules" | head -1)
+    fi
+    
+    if [[ -z "$kernel_version" ]]; then
+        log_error "No kernel version found in /lib/modules"
+        log_info "Available directories in $MOUNT_ROOT/lib:"
+        ls -la "$MOUNT_ROOT/lib/" || true
+        exit 1
+    fi
+    
+    if [[ ! -d "$MOUNT_ROOT/lib/modules/$kernel_version" ]]; then
+        log_error "Kernel modules directory does not exist: /lib/modules/$kernel_version"
+        exit 1
+    fi
+    
+    log_info "Generating initramfs for kernel version: $kernel_version"
+    
     # Generate initramfs with optimizations
-    chroot "$MOUNT_ROOT" mkinitfs -o /boot/initrd "$(ls $MOUNT_ROOT/lib/modules | head -1)" || {
-        log_error "Failed to generate initramfs"
+    chroot "$MOUNT_ROOT" mkinitfs -o /boot/initrd "$kernel_version" || {
+        log_error "Failed to generate initramfs for kernel $kernel_version"
         exit 1
     }
     
-    log_success "Initramfs generated"
+    log_success "Initramfs generated for kernel $kernel_version"
 }
 
 # Configure fast boot optimizations

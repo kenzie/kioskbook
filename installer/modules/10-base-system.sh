@@ -356,10 +356,14 @@ EOF
 configure_system() {
     log_info "Configuring system settings..."
     
-    # Configure shadow passwords
-    chroot "$MOUNT_ROOT" pwconv || {
-        log_warning "Failed to configure shadow passwords"
-    }
+    # Configure shadow passwords (Alpine may not have pwconv)
+    if chroot "$MOUNT_ROOT" command -v pwconv >/dev/null 2>&1; then
+        chroot "$MOUNT_ROOT" pwconv || {
+            log_warning "Failed to configure shadow passwords"
+        }
+    else
+        log_info "pwconv not available in Alpine, shadow passwords handled by adduser"
+    fi
     
     # Configure sudo/doas
     echo "permit nopass kiosk" > "$MOUNT_ROOT/etc/doas.conf"

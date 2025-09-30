@@ -51,22 +51,35 @@ validate_environment() {
 install_bootloader_packages() {
     log_info "Installing bootloader and optimization packages..."
     
-    local packages=(
+    # Essential packages that must install
+    local essential_packages=(
         "grub"
-        "grub-efi"
-        "efibootmgr"
         "plymouth"
         "plymouth-themes"
-        "imagemagick"
         "mkinitfs"
-        "linux-firmware-amdgpu"
         "watchdog"
     )
     
-    apk --root "$MOUNT_ROOT" add "${packages[@]}" || {
-        log_error "Failed to install bootloader packages"
+    # Optional packages that may fail on some systems
+    local optional_packages=(
+        "grub-efi"
+        "efibootmgr"
+        "imagemagick"
+        "linux-firmware-amdgpu"
+    )
+    
+    # Install essential packages first
+    apk --root "$MOUNT_ROOT" add "${essential_packages[@]}" || {
+        log_error "Failed to install essential bootloader packages"
         exit 1
     }
+    
+    # Install optional packages with warnings for failures
+    for pkg in "${optional_packages[@]}"; do
+        if ! apk --root "$MOUNT_ROOT" add "$pkg" 2>/dev/null; then
+            log_warning "Optional package '$pkg' not available or failed to install"
+        fi
+    done
     
     log_success "Bootloader packages installed"
 }
@@ -164,12 +177,30 @@ EOF
     chmod +x "$MOUNT_ROOT/tmp/create_route19_logo.sh"
     
     # Run the logo creation script
-    chroot "$MOUNT_ROOT" /tmp/create_route19_logo.sh || {
-        log_warning "Failed to create Route 19 logo, using fallback"
-        # Create minimal fallback
+    if chroot "$MOUNT_ROOT" /tmp/create_route19_logo.sh; then
+        log_success "Route 19 logo created successfully"
+    else
+        log_warning "Failed to create Route 19 logo, creating text-based fallback"
+        # Create minimal fallback with Route 19 text
         mkdir -p "$theme_dir"
-        echo -e "\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\x98\x81\x81\x81\x81\x81\x01\x00\x00\x05\x00\x01\r\n-\xdb\x00\x00\x00\x00IEND\xaeB\x60\x82" > "$theme_dir/logo.png"
-        # No need to copy to /boot for Plymouth
+        
+        # Try to create a simple text-based logo if ImageMagick is available
+        if chroot "$MOUNT_ROOT" command -v convert >/dev/null 2>&1; then
+            chroot "$MOUNT_ROOT" sh -c "
+                cd /tmp && \
+                convert -size 400x200 xc:black \
+                    -fill white -gravity center \
+                    -pointsize 48 -annotate +0-20 'ROUTE 19' \
+                    -pointsize 24 -annotate +0+20 'KIOSK SYSTEM' \
+                    /usr/share/plymouth/themes/route19/logo.png
+            " || {
+                # Final fallback: minimal 1x1 black PNG
+                echo -e "\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\x98\x81\x81\x81\x81\x81\x01\x00\x00\x05\x00\x01\r\n-\xdb\x00\x00\x00\x00IEND\xaeB\x60\x82" > "$theme_dir/logo.png"
+            }
+        else
+            # Final fallback: minimal 1x1 black PNG
+            echo -e "\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\x98\x81\x81\x81\x81\x81\x01\x00\x00\x05\x00\x01\r\n-\xdb\x00\x00\x00\x00IEND\xaeB\x60\x82" > "$theme_dir/logo.png"
+        fi
     }
     
     # Clean up

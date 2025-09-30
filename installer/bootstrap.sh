@@ -24,7 +24,7 @@ NC='\033[0m' # No Color
 
 # Configuration
 REPO_URL="https://github.com/kenzie/kioskbook.git"
-REPO_BRANCH="alpine-rewrite"
+REPO_BRANCH="main"
 WORK_DIR="/tmp/kioskbook-install"
 
 # Logging function

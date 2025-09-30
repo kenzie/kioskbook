@@ -164,28 +164,21 @@ confirm_disk_wipe() {
     disk_info=$(get_disk_info "$TARGET_DISK")
     
     echo ""
-    log_warning "DANGER: About to completely wipe disk!"
+    log_warning "About to completely wipe and repartition disk!"
     echo ""
     echo "$disk_info"
     echo ""
     log_error "ALL DATA ON $TARGET_DISK WILL BE PERMANENTLY LOST!"
     echo ""
     
-    # Double confirmation for safety
-    read -p "Type 'WIPE' to confirm disk destruction: " confirm1
-    if [[ "$confirm1" != "WIPE" ]]; then
+    # Single confirmation
+    read -p "Proceed with disk wipe and partitioning? (y/N): " confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
         log_info "Disk wipe cancelled by user"
         exit 1
     fi
     
-    read -p "Type 'YES' to proceed with partitioning: " confirm2
-    if [[ "$confirm2" != "YES" ]]; then
-        log_info "Disk wipe cancelled by user"
-        exit 1
-    fi
-    
-    log_warning "Proceeding with disk wipe in 3 seconds..."
-    sleep 3
+    log_info "Proceeding with disk wipe..."
 }
 
 # Wipe disk and existing partition table

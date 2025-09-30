@@ -52,25 +52,29 @@ KIOSK_ESSENTIAL=(
     "elogind"
 )
 
-# Display and graphics packages
+# Display and graphics packages (minimal)
 KIOSK_GRAPHICS=(
     "xf86-video-amdgpu"
-    "xf86-input-evdev"
     "xf86-input-libinput"
     "mesa-dri-gallium"
-    "linux-firmware-amdgpu"
 )
 
-# Browser and fonts (largest packages)
+# Browser and minimal fonts
 KIOSK_BROWSER=(
     "chromium"
-    "font-noto"
     "ttf-dejavu"
+)
+
+# Hardware-specific firmware (install only if hardware detected)
+KIOSK_FIRMWARE=(
+    "linux-firmware-amdgpu"
 )
 
 # Optional packages
 KIOSK_OPTIONAL=(
     "polkit"
+    "xf86-input-evdev"
+    "font-noto"
 )
 
 log_info "Starting base system setup module..."
@@ -175,7 +179,21 @@ install_kiosk_packages() {
     }
     log_success "Browser packages installed"
     
-    # Stage 4: Optional packages (with warnings on failure)
+    # Stage 4: Hardware-specific firmware (only if AMD GPU detected)
+    if lspci | grep -qi "amd\|radeon"; then
+        log_info "AMD GPU detected, installing AMD firmware..."
+        for pkg in "${KIOSK_FIRMWARE[@]}"; do
+            if ! apk --root "$MOUNT_ROOT" add "$pkg" 2>/dev/null; then
+                log_warning "AMD firmware package '$pkg' failed to install"
+            else
+                log_success "AMD firmware package '$pkg' installed"
+            fi
+        done
+    else
+        log_info "No AMD GPU detected, skipping AMD firmware"
+    fi
+    
+    # Stage 5: Optional packages (with warnings on failure)
     log_info "Installing optional packages..."
     for pkg in "${KIOSK_OPTIONAL[@]}"; do
         if ! apk --root "$MOUNT_ROOT" add "$pkg" 2>/dev/null; then

@@ -592,19 +592,46 @@ generate_initramfs() {
     
     # Check if kernel modules directory exists
     if [[ ! -d "$MOUNT_ROOT/lib/modules" ]]; then
-        log_warning "Kernel modules directory not found, installing kernel with essential dependencies..."
+        log_warning "Kernel modules directory not found, installing kernel..."
         
-        # First try to install just the kernel and essential dependencies
-        # Avoid full linux-firmware but allow essential kernel dependencies
-        chroot "$MOUNT_ROOT" apk add linux-lts --no-install-recommends || {
-            log_warning "Failed with --no-install-recommends, trying minimal approach..."
-            
-            # Fallback: install kernel allowing dependencies but without firmware
-            chroot "$MOUNT_ROOT" apk add linux-lts || {
-                log_error "Failed to install kernel"
-                exit 1
-            }
+        # Update package cache first to avoid temporary errors
+        log_info "Updating package cache to avoid repository errors..."
+        chroot "$MOUNT_ROOT" apk update || {
+            log_warning "Failed to update package cache"
         }
+        
+        # Try multiple approaches for kernel installation
+        local kernel_installed=false
+        
+        # Approach 1: Try with minimal firmware
+        if ! $kernel_installed; then
+            log_info "Attempting kernel installation with minimal dependencies..."
+            if chroot "$MOUNT_ROOT" apk add linux-lts linux-firmware-none 2>/dev/null; then
+                log_success "Kernel installed with minimal firmware"
+                kernel_installed=true
+            fi
+        fi
+        
+        # Approach 2: Try without recommends
+        if ! $kernel_installed; then
+            log_info "Attempting kernel installation without recommends..."
+            if chroot "$MOUNT_ROOT" apk add linux-lts --no-install-recommends 2>/dev/null; then
+                log_success "Kernel installed without recommends"
+                kernel_installed=true
+            fi
+        fi
+        
+        # Approach 3: Standard installation (will pull firmware but works)
+        if ! $kernel_installed; then
+            log_warning "Minimal approaches failed, installing kernel with full dependencies..."
+            if chroot "$MOUNT_ROOT" apk add linux-lts; then
+                log_success "Kernel installed with full dependencies"
+                kernel_installed=true
+            else
+                log_error "All kernel installation attempts failed"
+                exit 1
+            fi
+        fi
         
         # Ensure mkinitfs is available
         chroot "$MOUNT_ROOT" apk add mkinitfs || {

@@ -139,10 +139,20 @@ install_kiosk_packages() {
     # Install each package individually to catch specific failures
     for pkg in "${KIOSK_CORE[@]}"; do
         log_info "Installing $pkg..."
-        if apk --root "$MOUNT_ROOT" add "$pkg"; then
+        
+        # Capture both output and exit code
+        local output
+        local exit_code
+        output=$(apk --root "$MOUNT_ROOT" add "$pkg" 2>&1)
+        exit_code=$?
+        
+        echo "$output"  # Show the apk output
+        
+        if [[ $exit_code -eq 0 ]]; then
             log_success "$pkg installed successfully"
         else
-            log_error "Failed to install $pkg - this will help identify the problematic package"
+            log_error "Failed to install $pkg (exit code: $exit_code)"
+            log_error "APK output: $output"
             exit 1
         fi
     done

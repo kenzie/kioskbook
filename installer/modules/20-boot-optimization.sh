@@ -750,8 +750,8 @@ main() {
     optimize_initramfs
     configure_watchdog
     optimize_services
-    install_extlinux
     generate_initramfs
+    install_extlinux
     configure_fast_boot
     validate_boot_config
     

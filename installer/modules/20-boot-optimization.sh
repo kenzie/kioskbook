@@ -184,13 +184,8 @@ EOF
         log_error "Ensure route19-logo.png exists in repository and ImageMagick is available"
         # Create minimal placeholder to prevent Plymouth errors
         mkdir -p "$theme_dir"
-        # Create a simple black square using ImageMagick if available, otherwise skip
-        if chroot "$MOUNT_ROOT" command -v convert >/dev/null 2>&1; then
-            chroot "$MOUNT_ROOT" convert -size 1x1 xc:black "/usr/share/plymouth/themes/route19/logo.png" || touch "$theme_dir/logo.png"
-        else
-            touch "$theme_dir/logo.png"
-        fi
-    }
+        touch "$theme_dir/logo.png"
+    fi
     
     # Clean up
     rm -f "$MOUNT_ROOT/tmp/create_route19_logo.sh"

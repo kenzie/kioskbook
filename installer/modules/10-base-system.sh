@@ -195,13 +195,20 @@ configure_timezone() {
 create_kiosk_user() {
     log_info "Creating kiosk user..."
     
-    # Create kiosk user
-    chroot "$MOUNT_ROOT" adduser -D -s /bin/ash -h /home/kiosk -G users kiosk || {
+    # Create kiosk group first
+    chroot "$MOUNT_ROOT" addgroup kiosk || {
+        log_error "Failed to create kiosk group"
+        exit 1
+    }
+    
+    # Create kiosk user and add to kiosk group
+    chroot "$MOUNT_ROOT" adduser -D -s /bin/ash -h /home/kiosk -G kiosk kiosk || {
         log_error "Failed to create kiosk user"
         exit 1
     }
     
-    # Add kiosk user to necessary groups
+    # Add kiosk user to necessary additional groups
+    chroot "$MOUNT_ROOT" addgroup kiosk users || true
     chroot "$MOUNT_ROOT" addgroup kiosk audio || true
     chroot "$MOUNT_ROOT" addgroup kiosk video || true
     chroot "$MOUNT_ROOT" addgroup kiosk input || true

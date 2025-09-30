@@ -268,10 +268,11 @@ configure_plymouth() {
 optimize_initramfs() {
     log_info "Optimizing initramfs for fast boot..."
     
-    # Configure mkinitfs for minimal initramfs
+    # Configure mkinitfs for minimal initramfs (only essential features)
     cat > "$MOUNT_ROOT/etc/mkinitfs/mkinitfs.conf" << 'EOF'
-# KioskBook optimized initramfs configuration
-features="ata base ext4 keymap kms mmc raid scsi usb virtio nvme plymouth"
+# KioskBook minimal initramfs configuration
+# Only include essential features for faster generation and boot
+features="base ext4 nvme ata scsi usb plymouth"
 EOF
     
     # Create initramfs hooks for optimization

@@ -69,27 +69,31 @@ create_boot_splash_script() {
 #!/bin/sh
 # KioskBook Boot Splash Screen with Route 19 Logo
 
-# Clear screen
+# Clear screen and set colors
 clear
 echo -e "\033[2J\033[H"
 
-# Try to display Route 19 logo using framebuffer
-if [ -c /dev/fb0 ] && [ -f /usr/share/kioskbook/route19-logo.png ]; then
-    # Display Route 19 logo on framebuffer
-    fbi -d /dev/fb0 -T 1 /usr/share/kioskbook/route19-logo.png &
-    sleep 3
-    killall fbi 2>/dev/null
-elif [ -f /usr/share/kioskbook/route19-logo.txt ]; then
-    # Display text-based logo
-    cat /usr/share/kioskbook/route19-logo.txt
-    sleep 2
-fi
-
-# Show startup message
-echo -e "\033[1;33mRoute 19 KioskBook\033[0m"
+# Show Route 19 logo/startup message
+echo -e "\033[1;33m"
+echo "╔═══════════════════════════════════════════════════════╗"
+echo "║                                                       ║"
+echo "║                     ROUTE 19                          ║"
+echo "║                                                       ║"
+echo "║                  KIOSKBOOK                            ║"
+echo "║                                                       ║"
+echo "╚═══════════════════════════════════════════════════════╝"
+echo -e "\033[0m"
 echo
 echo -e "\033[1;37mStarting KioskBook...\033[0m"
-sleep 1
+
+# Try to display Route 19 logo using framebuffer if available
+if [ -c /dev/fb0 ] && [ -f /usr/share/kioskbook/route19-logo.png ]; then
+    fbi -d /dev/fb0 -T 1 /usr/share/kioskbook/route19-logo.png &
+    sleep 2
+    killall fbi 2>/dev/null
+fi
+
+sleep 2
 EOF
     
     chmod +x "$SPLASH_DIR/boot-splash.sh"
@@ -111,7 +115,7 @@ create_startup_service() {
     cat > /etc/systemd/system/route19-startup.service << EOF
 [Unit]
 Description=Route 19 Startup Display
-After=multi-user.target
+After=local-fs.target
 Before=graphical-session.target
 
 [Service]

@@ -168,7 +168,7 @@ install_packages() {
     log "Installing required packages..."
     
     # List of required packages
-    packages="bash git curl"
+    packages="bash git curl parted"
     
     # Check if packages are already installed (idempotent)
     all_installed=true

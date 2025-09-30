@@ -73,20 +73,26 @@ create_boot_splash_script() {
 clear
 echo -e "\033[2J\033[H\033[?25l"
 
-# Wait a moment for system to stabilize
-sleep 1
+# Wait for framebuffer to be ready
+sleep 2
 
 # Display Route 19 logo on framebuffer
-if [ -c /dev/fb0 ] && [ -f /usr/share/kioskbook/route19-logo.png ]; then
-    # Use fbi to display logo on framebuffer
-    fbi -d /dev/fb0 -T 1 -noverbose /usr/share/kioskbook/route19-logo.png 2>/dev/null &
-    FBI_PID=$!
-    sleep 4
-    kill $FBI_PID 2>/dev/null
-    killall fbi 2>/dev/null
+if [ -c /dev/fb0 ]; then
+    if [ -f /usr/share/kioskbook/route19-logo.png ]; then
+        # Use fbi to display logo on framebuffer
+        fbi -d /dev/fb0 -T 1 -noverbose /usr/share/kioskbook/route19-logo.png 2>/dev/null &
+        FBI_PID=$!
+        sleep 5
+        kill $FBI_PID 2>/dev/null
+        killall fbi 2>/dev/null
+    else
+        # Clear framebuffer to black if no logo
+        dd if=/dev/zero of=/dev/fb0 2>/dev/null
+        sleep 3
+    fi
 else
     # Fallback: show black screen
-    sleep 2
+    sleep 3
 fi
 
 # Re-enable cursor
@@ -118,8 +124,8 @@ Before=graphical-session.target
 [Service]
 Type=oneshot
 ExecStart=$SPLASH_DIR/boot-splash.sh
-StandardOutput=journal+console
-StandardError=journal+console
+StandardOutput=null
+StandardError=null
 
 [Install]
 WantedBy=multi-user.target

@@ -272,11 +272,18 @@ configure_plymouth() {
     fi
     
     # Rebuild initramfs to include Plymouth
-    local kernel_version=$(chroot "$MOUNT_ROOT" ls /lib/modules/ | head -n1)
-    if [[ -n "$kernel_version" ]]; then
-        chroot "$MOUNT_ROOT" mkinitfs "$kernel_version" || {
-            log_warning "Failed to rebuild initramfs with Plymouth"
-        }
+    if [[ -d "$MOUNT_ROOT/lib/modules" ]]; then
+        local kernel_version=$(chroot "$MOUNT_ROOT" ls /lib/modules/ 2>/dev/null | head -n1)
+        if [[ -n "$kernel_version" && -d "$MOUNT_ROOT/lib/modules/$kernel_version" ]]; then
+            log_info "Rebuilding initramfs with Plymouth for kernel $kernel_version"
+            chroot "$MOUNT_ROOT" mkinitfs "$kernel_version" || {
+                log_warning "Failed to rebuild initramfs with Plymouth"
+            }
+        else
+            log_warning "No valid kernel version found in /lib/modules, skipping initramfs rebuild"
+        fi
+    else
+        log_warning "/lib/modules directory not found, initramfs will be built later"
     fi
     
     log_success "Plymouth configured for boot splash"

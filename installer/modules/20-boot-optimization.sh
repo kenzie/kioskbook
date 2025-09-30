@@ -589,12 +589,21 @@ generate_initramfs() {
     
     # Check if kernel modules directory exists
     if [[ ! -d "$MOUNT_ROOT/lib/modules" ]]; then
-        log_warning "Kernel modules directory not found, installing kernel packages..."
-        # Ensure kernel packages are installed (minimal firmware for AMD)
-        chroot "$MOUNT_ROOT" apk add linux-lts linux-firmware-amdgpu || {
-            log_error "Failed to install kernel packages"
+        log_warning "Kernel modules directory not found, installing kernel without firmware bloat..."
+        
+        # Install kernel without dependencies to avoid firmware bloat
+        chroot "$MOUNT_ROOT" apk add --no-deps linux-lts || {
+            log_error "Failed to install kernel"
             exit 1
         }
+        
+        # Install only essential modules manually
+        chroot "$MOUNT_ROOT" apk add mkinitfs || {
+            log_error "Failed to install mkinitfs"
+            exit 1
+        }
+        
+        log_info "Kernel installed without firmware dependencies"
         
         # Wait a moment for filesystem to settle
         sleep 2

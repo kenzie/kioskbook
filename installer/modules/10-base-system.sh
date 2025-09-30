@@ -24,7 +24,7 @@ MODULE_NAME="10-base-system"
 ALPINE_MIRROR="http://dl-cdn.alpinelinux.org/alpine"
 ALPINE_VERSION="latest-stable"
 
-# Essential packages for kiosk operation
+# Essential packages for kiosk operation (without kernel to avoid firmware bloat)
 BASE_PACKAGES=(
     "alpine-base"
     "alpine-conf"
@@ -39,7 +39,6 @@ BASE_PACKAGES=(
     "openssh"
     "chrony"
     "logrotate"
-    "linux-lts"
 )
 
 # Core kiosk functionality (install individually to catch specific failures)

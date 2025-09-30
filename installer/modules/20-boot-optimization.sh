@@ -57,7 +57,6 @@ install_bootloader_packages() {
         "plymouth"
         "plymouth-themes"
         "mkinitfs"
-        "watchdog"
     )
     
     # Optional packages that may fail on some systems
@@ -65,6 +64,7 @@ install_bootloader_packages() {
         "efibootmgr"
         "imagemagick"
         "linux-firmware-amdgpu"
+        "watchdog"
     )
     
     # Install essential packages first

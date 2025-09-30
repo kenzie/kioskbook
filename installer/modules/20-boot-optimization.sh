@@ -621,14 +621,40 @@ generate_initramfs() {
             fi
         fi
         
-        # Approach 3: Standard installation (will pull firmware but works)
+        # Approach 3: Try with different repository mirrors
         if ! $kernel_installed; then
-            log_warning "Minimal approaches failed, installing kernel with full dependencies..."
+            log_warning "Trying alternative repository mirrors..."
+            
+            # Backup original repositories
+            cp "$MOUNT_ROOT/etc/apk/repositories" "$MOUNT_ROOT/etc/apk/repositories.backup" || true
+            
+            # Try alternative mirrors
+            cat > "$MOUNT_ROOT/etc/apk/repositories" << 'EOF'
+http://mirror.leaseweb.com/alpine/v3.22/main
+http://mirror.leaseweb.com/alpine/v3.22/community
+https://alpine.global.ssl.fastly.net/alpine/v3.22/main
+https://alpine.global.ssl.fastly.net/alpine/v3.22/community
+EOF
+            
+            chroot "$MOUNT_ROOT" apk update
             if chroot "$MOUNT_ROOT" apk add linux-lts; then
-                log_success "Kernel installed with full dependencies"
+                log_success "Kernel installed using alternative mirrors"
                 kernel_installed=true
             else
-                log_error "All kernel installation attempts failed"
+                # Restore original repositories
+                cp "$MOUNT_ROOT/etc/apk/repositories.backup" "$MOUNT_ROOT/etc/apk/repositories" || true
+            fi
+        fi
+        
+        # Approach 4: Final fallback - accept any kernel version available
+        if ! $kernel_installed; then
+            log_warning "Final attempt with any available kernel..."
+            if chroot "$MOUNT_ROOT" apk add linux-edge 2>/dev/null || chroot "$MOUNT_ROOT" apk add linux-virt 2>/dev/null; then
+                log_success "Alternative kernel installed"
+                kernel_installed=true
+            else
+                log_error "All kernel installation attempts failed - repository or network issue"
+                log_error "Try running the installation again or check network connectivity"
                 exit 1
             fi
         fi

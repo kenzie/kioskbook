@@ -53,7 +53,7 @@ check_dependencies() {
     log "Checking dependencies..."
     
     # Check if UTM CLI is available
-    if ! command -v utm >/dev/null 2>&1; then
+    if ! command -v utmctl >/dev/null 2>&1; then
         log_error "UTM CLI not found. Please install UTM and add it to PATH."
         log "Install UTM from: https://mac.getutm.app/"
         log "Add UTM CLI to PATH: export PATH=\"/Applications/UTM.app/Contents/MacOS:\$PATH\""
@@ -76,7 +76,7 @@ check_dependencies() {
 
 # Download Alpine ISO
 download_alpine_iso() {
-    local iso_path="$SCRIPT_DIR/$ALPINE_ISO_NAME"
+    local iso_path="$HOME/Downloads/$ALPINE_ISO_NAME"
     
     if [[ -f "$iso_path" ]]; then
         log "Alpine ISO already exists: $iso_path"
@@ -114,7 +114,7 @@ create_vm() {
     log "Creating UTM virtual machine: $VM_NAME"
     
     # Check if VM already exists
-    if utm list | grep -q "$VM_NAME"; then
+    if utmctl list | grep -q "$VM_NAME"; then
         log_warning "VM '$VM_NAME' already exists"
         log "Use 'delete' command to remove it first, or 'start' to run existing VM"
         return 0
@@ -128,7 +128,7 @@ create_vm() {
     
     # Create VM from configuration
     log "Creating VM from configuration: $UTM_CONFIG"
-    utm create --config "$UTM_CONFIG" "$VM_NAME" || {
+    utmctl create --config "$UTM_CONFIG" "$VM_NAME" || {
         log_error "Failed to create VM from configuration"
         exit 1
     }
@@ -141,13 +141,13 @@ create_vm_cli() {
     log "Creating UTM virtual machine using CLI parameters: $VM_NAME"
     
     # Check if VM already exists
-    if utm list | grep -q "$VM_NAME"; then
+    if utmctl list | grep -q "$VM_NAME"; then
         log_warning "VM '$VM_NAME' already exists"
         return 0
     fi
     
     # Create VM with specific parameters
-    utm create \
+    utmctl create \
         --name "$VM_NAME" \
         --operating-system linux \
         --architecture x86_64 \
@@ -166,7 +166,7 @@ create_vm_cli() {
 
 # Attach Alpine ISO to VM
 attach_iso() {
-    local iso_path="$SCRIPT_DIR/$ALPINE_ISO_NAME"
+    local iso_path="$HOME/Downloads/$ALPINE_ISO_NAME"
     
     if [[ ! -f "$iso_path" ]]; then
         log_error "Alpine ISO not found: $iso_path"
@@ -175,7 +175,7 @@ attach_iso() {
     fi
     
     log "Attaching Alpine ISO to VM..."
-    utm attach --vm "$VM_NAME" --drive cdrom --image "$iso_path" || {
+    utmctl attach --vm "$VM_NAME" --drive cdrom --image "$iso_path" || {
         log_error "Failed to attach ISO to VM"
         exit 1
     }
@@ -187,18 +187,18 @@ attach_iso() {
 start_vm() {
     log "Starting VM: $VM_NAME"
     
-    if ! utm list | grep -q "$VM_NAME"; then
+    if ! utmctl list | grep -q "$VM_NAME"; then
         log_error "VM '$VM_NAME' not found. Create it first."
         exit 1
     fi
     
     # Check if VM is already running
-    if utm status "$VM_NAME" | grep -q "running"; then
+    if utmctl status "$VM_NAME" | grep -q "running"; then
         log_warning "VM '$VM_NAME' is already running"
         return 0
     fi
     
-    utm start "$VM_NAME" || {
+    utmctl start "$VM_NAME" || {
         log_error "Failed to start VM"
         exit 1
     }
@@ -213,18 +213,18 @@ start_vm() {
 stop_vm() {
     log "Stopping VM: $VM_NAME"
     
-    if ! utm list | grep -q "$VM_NAME"; then
+    if ! utmctl list | grep -q "$VM_NAME"; then
         log_warning "VM '$VM_NAME' not found"
         return 0
     fi
     
     # Check if VM is running
-    if ! utm status "$VM_NAME" | grep -q "running"; then
+    if ! utmctl status "$VM_NAME" | grep -q "running"; then
         log_warning "VM '$VM_NAME' is not running"
         return 0
     fi
     
-    utm stop "$VM_NAME" || {
+    utmctl stop "$VM_NAME" || {
         log_error "Failed to stop VM"
         exit 1
     }
@@ -236,19 +236,19 @@ stop_vm() {
 delete_vm() {
     log "Deleting VM: $VM_NAME"
     
-    if ! utm list | grep -q "$VM_NAME"; then
+    if ! utmctl list | grep -q "$VM_NAME"; then
         log_warning "VM '$VM_NAME' not found"
         return 0
     fi
     
     # Stop VM if running
-    if utm status "$VM_NAME" | grep -q "running"; then
+    if utmctl status "$VM_NAME" | grep -q "running"; then
         log "Stopping VM before deletion..."
         stop_vm
         sleep 2
     fi
     
-    utm delete "$VM_NAME" || {
+    utmctl delete "$VM_NAME" || {
         log_error "Failed to delete VM"
         exit 1
     }
@@ -262,19 +262,19 @@ create_snapshot() {
     
     log "Creating VM snapshot: $snapshot_name"
     
-    if ! utm list | grep -q "$VM_NAME"; then
+    if ! utmctl list | grep -q "$VM_NAME"; then
         log_error "VM '$VM_NAME' not found"
         exit 1
     fi
     
     # Stop VM if running (required for snapshot)
-    if utm status "$VM_NAME" | grep -q "running"; then
+    if utmctl status "$VM_NAME" | grep -q "running"; then
         log "Stopping VM for snapshot creation..."
         stop_vm
         sleep 2
     fi
     
-    utm snapshot create "$VM_NAME" "$snapshot_name" || {
+    utmctl snapshot create "$VM_NAME" "$snapshot_name" || {
         log_error "Failed to create snapshot"
         exit 1
     }
@@ -288,19 +288,19 @@ restore_snapshot() {
     
     log "Restoring VM snapshot: $snapshot_name"
     
-    if ! utm list | grep -q "$VM_NAME"; then
+    if ! utmctl list | grep -q "$VM_NAME"; then
         log_error "VM '$VM_NAME' not found"
         exit 1
     fi
     
     # Stop VM if running
-    if utm status "$VM_NAME" | grep -q "running"; then
+    if utmctl status "$VM_NAME" | grep -q "running"; then
         log "Stopping VM for snapshot restore..."
         stop_vm
         sleep 2
     fi
     
-    utm snapshot restore "$VM_NAME" "$snapshot_name" || {
+    utmctl snapshot restore "$VM_NAME" "$snapshot_name" || {
         log_error "Failed to restore snapshot"
         exit 1
     }
@@ -312,12 +312,12 @@ restore_snapshot() {
 list_snapshots() {
     log "Listing snapshots for VM: $VM_NAME"
     
-    if ! utm list | grep -q "$VM_NAME"; then
+    if ! utmctl list | grep -q "$VM_NAME"; then
         log_error "VM '$VM_NAME' not found"
         exit 1
     fi
     
-    utm snapshot list "$VM_NAME" || {
+    utmctl snapshot list "$VM_NAME" || {
         log_error "Failed to list snapshots"
         exit 1
     }
@@ -328,31 +328,31 @@ show_status() {
     log "VM Status for: $VM_NAME"
     echo
     
-    if utm list | grep -q "$VM_NAME"; then
+    if utmctl list | grep -q "$VM_NAME"; then
         echo "VM Status:"
-        utm status "$VM_NAME"
+        utmctl status "$VM_NAME"
         echo
         
         echo "VM Configuration:"
-        utm info "$VM_NAME" 2>/dev/null || echo "  (Configuration details not available)"
+        utmctl info "$VM_NAME" 2>/dev/null || echo "  (Configuration details not available)"
         echo
         
         echo "Available Snapshots:"
-        utm snapshot list "$VM_NAME" 2>/dev/null || echo "  (No snapshots or snapshots not available)"
+        utmctl snapshot list "$VM_NAME" 2>/dev/null || echo "  (No snapshots or snapshots not available)"
     else
         echo "VM '$VM_NAME' not found"
     fi
     
     echo
     echo "Available VMs:"
-    utm list
+    utmctl list
 }
 
 # Boot from installer (set boot order to CD-ROM first)
 boot_installer() {
     log "Configuring VM to boot from installer ISO..."
     
-    if ! utm list | grep -q "$VM_NAME"; then
+    if ! utmctl list | grep -q "$VM_NAME"; then
         log_error "VM '$VM_NAME' not found"
         exit 1
     fi
@@ -374,7 +374,7 @@ boot_installer() {
 boot_disk() {
     log "Configuring VM to boot from installed disk..."
     
-    if ! utm list | grep -q "$VM_NAME"; then
+    if ! utmctl list | grep -q "$VM_NAME"; then
         log_error "VM '$VM_NAME' not found"
         exit 1
     fi
@@ -392,20 +392,31 @@ boot_disk() {
 
 # Complete setup workflow
 setup_complete() {
-    log "Setting up complete KioskBook testing environment..."
+    log "Setting up KioskBook testing environment..."
     
     download_alpine_iso
-    create_vm
-    attach_iso
     
-    log_success "KioskBook testing environment ready!"
+    log_success "Alpine ISO downloaded to ~/Downloads/"
     log ""
-    log "Next steps:"
-    log "1. Start VM: $0 start"
-    log "2. Install Alpine Linux using setup-alpine"
-    log "3. Create snapshot: $0 snapshot kioskbook-alpine-base"
-    log "4. Run KioskBook installer: wget -O bootstrap.sh https://raw.githubusercontent.com/kenzie/kioskbook/alpine-rewrite/installer/bootstrap.sh && ./bootstrap.sh"
-    log "5. Test installation and create final snapshot"
+    log "Manual UTM Setup Required:"
+    log "=========================="
+    log "1. Open UTM application"
+    log "2. Click 'Create a New Virtual Machine'"
+    log "3. Choose 'Virtualize' -> 'Linux'"
+    log "4. Configure VM settings:"
+    log "   - Name: KioskBook-Alpine-Test"
+    log "   - Memory: 4096 MB (4GB)"
+    log "   - CPU Cores: 4"
+    log "   - Storage: 20GB NVMe/VirtIO"
+    log "   - Display: 1920x1080, Retina OFF"
+    log "   - Network: Shared Network"
+    log "5. Set Boot ISO to: ~/Downloads/$ALPINE_ISO_NAME"
+    log "6. Start VM and install Alpine Linux"
+    log "7. After Alpine installation, run:"
+    log "   wget -O bootstrap.sh https://raw.githubusercontent.com/kenzie/kioskbook/main/installer/bootstrap.sh"
+    log "   chmod +x bootstrap.sh && ./bootstrap.sh"
+    log ""
+    log "For detailed setup guide, see: tools/utm-setup.md"
     log ""
     log "VM Network Access:"
     log "- SSH: ssh -p 2222 root@localhost"

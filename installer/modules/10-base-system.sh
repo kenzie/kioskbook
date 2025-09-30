@@ -39,6 +39,8 @@ BASE_PACKAGES=(
     "openssh"
     "chrony"
     "logrotate"
+    "linux-lts"
+    "linux-firmware"
 )
 
 # Kiosk-specific packages

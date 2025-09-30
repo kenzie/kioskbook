@@ -29,19 +29,19 @@ WORK_DIR="/tmp/kioskbook-install"
 
 # Logging function
 log() {
-    echo "${BLUE}[BOOTSTRAP]${NC} $1"
+    printf "${BLUE}[BOOTSTRAP]${NC} %s\n" "$1"
 }
 
 log_success() {
-    echo "${GREEN}[SUCCESS]${NC} $1"
+    printf "${GREEN}[SUCCESS]${NC} %s\n" "$1"
 }
 
 log_warning() {
-    echo "${YELLOW}[WARNING]${NC} $1"
+    printf "${YELLOW}[WARNING]${NC} %s\n" "$1"
 }
 
 log_error() {
-    echo "${RED}[ERROR]${NC} $1"
+    printf "${RED}[ERROR]${NC} %s\n" "$1"
 }
 
 # Error handler
@@ -287,11 +287,11 @@ execute_main_installer() {
 
 # Main bootstrap process
 main() {
-    echo ""
-    echo "${BLUE}================================================${NC}"
-    echo "${BLUE}    KioskBook Alpine Linux Bootstrap${NC}"
-    echo "${BLUE}================================================${NC}"
-    echo ""
+    printf "\n"
+    printf "${BLUE}================================================${NC}\n"
+    printf "${BLUE}    KioskBook Alpine Linux Bootstrap${NC}\n"
+    printf "${BLUE}================================================${NC}\n"
+    printf "\n"
     
     log "Starting bootstrap process..."
     
@@ -305,10 +305,10 @@ main() {
     setup_route19_logo
     verify_files
     
-    echo ""
+    printf "\n"
     log_success "Bootstrap completed successfully!"
     log "Switching to main installer..."
-    echo ""
+    printf "\n"
     
     # Pass all arguments to main installer
     execute_main_installer "$@"

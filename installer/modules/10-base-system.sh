@@ -40,7 +40,6 @@ BASE_PACKAGES=(
     "chrony"
     "logrotate"
     "linux-lts"
-    "linux-firmware"
 )
 
 # Kiosk-specific packages
@@ -59,6 +58,7 @@ KIOSK_PACKAGES=(
     "dbus"
     "polkit"
     "elogind"
+    "linux-firmware-amdgpu"
 )
 
 log_info "Starting base system setup module..."

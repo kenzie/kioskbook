@@ -589,8 +589,8 @@ generate_initramfs() {
     # Check if kernel modules directory exists
     if [[ ! -d "$MOUNT_ROOT/lib/modules" ]]; then
         log_warning "Kernel modules directory not found, installing kernel packages..."
-        # Ensure kernel packages are installed
-        chroot "$MOUNT_ROOT" apk add linux-lts linux-firmware || {
+        # Ensure kernel packages are installed (minimal firmware for AMD)
+        chroot "$MOUNT_ROOT" apk add linux-lts linux-firmware-amdgpu || {
             log_error "Failed to install kernel packages"
             exit 1
         }

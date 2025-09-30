@@ -42,38 +42,14 @@ BASE_PACKAGES=(
     "linux-lts"
 )
 
-# Absolute minimum for basic functionality
-KIOSK_ESSENTIAL=(
+# Core kiosk functionality (install individually to catch specific failures)
+KIOSK_CORE=(
     "nodejs"
     "npm"
-)
-
-# Display system (bare minimum)
-KIOSK_GRAPHICS=(
+    "chromium"
     "xorg-server"
-    "xf86-input-libinput"
-)
-
-# Browser only (skip for first successful install)
-KIOSK_BROWSER=(
-    # Skip Chromium for now - just get basic system working
-)
-
-# Hardware-specific firmware (install only if hardware detected)
-KIOSK_FIRMWARE=(
-    "linux-firmware-amdgpu"
-)
-
-# System services (essential for boot)
-KIOSK_SERVICES=(
     "eudev"
     "dbus"
-    "elogind"
-)
-
-# Optional packages (skip for first install)
-KIOSK_OPTIONAL=(
-    # Skip all optional packages for now
 )
 
 log_info "Starting base system setup module..."
@@ -150,57 +126,22 @@ install_base_packages() {
     log_success "Base packages installed"
 }
 
-# Install kiosk-specific packages in stages
+# Install core kiosk packages individually to identify failures
 install_kiosk_packages() {
-    log_info "Installing kiosk-specific packages in stages..."
+    log_info "Installing core kiosk packages individually..."
     
-    # Stage 1: Essential packages
-    log_info "Installing essential kiosk packages..."
-    apk --root "$MOUNT_ROOT" add "${KIOSK_ESSENTIAL[@]}" || {
-        log_error "Failed to install essential kiosk packages"
-        exit 1
-    }
-    log_success "Essential kiosk packages installed"
-    
-    # Stage 2: System services
-    log_info "Installing essential system services..."
-    apk --root "$MOUNT_ROOT" add "${KIOSK_SERVICES[@]}" || {
-        log_error "Failed to install system services"
-        exit 1
-    }
-    log_success "System services installed"
-    
-    # Stage 3: Graphics packages
-    log_info "Installing minimal graphics and display..."
-    if [[ ${#KIOSK_GRAPHICS[@]} -gt 0 ]]; then
-        apk --root "$MOUNT_ROOT" add "${KIOSK_GRAPHICS[@]}" || {
-            log_error "Failed to install graphics packages"
+    # Install each package individually to catch specific failures
+    for pkg in "${KIOSK_CORE[@]}"; do
+        log_info "Installing $pkg..."
+        if apk --root "$MOUNT_ROOT" add "$pkg"; then
+            log_success "$pkg installed successfully"
+        else
+            log_error "Failed to install $pkg - this will help identify the problematic package"
             exit 1
-        }
-        log_success "Graphics packages installed"
-    else
-        log_info "No graphics packages configured"
-    fi
+        fi
+    done
     
-    # Stage 4: Browser (skip for now)
-    if [[ ${#KIOSK_BROWSER[@]} -gt 0 ]]; then
-        log_info "Installing browser packages..."
-        apk --root "$MOUNT_ROOT" add "${KIOSK_BROWSER[@]}" || {
-            log_error "Failed to install browser packages"
-            exit 1
-        }
-        log_success "Browser packages installed"
-    else
-        log_info "Browser packages skipped for minimal install"
-    fi
-    
-    # Stage 5: Hardware-specific firmware (skip for minimal install)
-    log_info "Skipping firmware for minimal install"
-    
-    # Stage 6: Optional packages (skip for minimal install)
-    log_info "Skipping optional packages for minimal install"
-    
-    log_success "Kiosk packages installation completed"
+    log_success "All core kiosk packages installed successfully"
 }
 
 # Configure hostname

@@ -67,33 +67,22 @@ create_boot_splash_script() {
     
     cat > "$SPLASH_DIR/boot-splash.sh" << 'EOF'
 #!/bin/sh
-# KioskBook Boot Splash Screen with Route 19 Logo
+# KioskBook Boot Splash Screen - Route 19 Logo Only
 
-# Clear screen and set colors
+# Clear screen to black
 clear
 echo -e "\033[2J\033[H"
 
-# Show Route 19 logo/startup message
-echo -e "\033[1;33m"
-echo "╔═══════════════════════════════════════════════════════╗"
-echo "║                                                       ║"
-echo "║                     ROUTE 19                          ║"
-echo "║                                                       ║"
-echo "║                  KIOSKBOOK                            ║"
-echo "║                                                       ║"
-echo "╚═══════════════════════════════════════════════════════╝"
-echo -e "\033[0m"
-echo
-echo -e "\033[1;37mStarting KioskBook...\033[0m"
-
-# Try to display Route 19 logo using framebuffer if available
+# Display Route 19 logo on framebuffer (centered on black background)
 if [ -c /dev/fb0 ] && [ -f /usr/share/kioskbook/route19-logo.png ]; then
-    fbi -d /dev/fb0 -T 1 /usr/share/kioskbook/route19-logo.png &
-    sleep 2
+    # Use fbi to display logo centered on black background
+    fbi -d /dev/fb0 -T 1 -noverbose /usr/share/kioskbook/route19-logo.png &
+    sleep 3
     killall fbi 2>/dev/null
+else
+    # Fallback: show black screen briefly if no logo available
+    sleep 1
 fi
-
-sleep 2
 EOF
     
     chmod +x "$SPLASH_DIR/boot-splash.sh"
@@ -139,12 +128,17 @@ configure_plymouth() {
     log_info "Checking for Plymouth configuration..."
     
     if command -v plymouth >/dev/null 2>&1; then
-        log_info "Plymouth found, configuring custom theme..."
+        log_info "Plymouth found, configuring Route 19 theme..."
         
         # Create custom Plymouth theme directory
         mkdir -p /usr/share/plymouth/themes/route19/
         
-        # Create simple Plymouth theme
+        # Copy Route 19 logo to Plymouth theme directory
+        if [ -f "/usr/share/kioskbook/route19-logo.png" ]; then
+            cp "/usr/share/kioskbook/route19-logo.png" "/usr/share/plymouth/themes/route19/"
+        fi
+        
+        # Create simple Plymouth theme (logo only, no text)
         cat > /usr/share/plymouth/themes/route19/route19.plymouth << 'EOF'
 [Plymouth Theme]
 Name=Route 19
@@ -157,26 +151,17 @@ ScriptFile=/usr/share/plymouth/themes/route19/route19.script
 EOF
         
         cat > /usr/share/plymouth/themes/route19/route19.script << 'EOF'
-# Route 19 Plymouth Theme Script
+# Route 19 Plymouth Theme Script - Logo Only
 
+# Set black background
 Window.SetBackgroundTopColor (0.0, 0.0, 0.0);
 Window.SetBackgroundBottomColor (0.0, 0.0, 0.0);
 
-# Show Route 19 logo
+# Show Route 19 logo centered
 logo_image = Image("route19-logo.png");
 logo_sprite = Sprite(logo_image);
 logo_sprite.SetPosition(screen_width / 2 - logo_image.GetWidth() / 2, screen_height / 2 - logo_image.GetHeight() / 2, 0);
 logo_sprite.SetOpacity(1);
-
-# Show progress
-progress = Progress.Bar(logo_image.GetWidth(), 10);
-progress.SetPosition(screen_width / 2 - progress.GetWidth() / 2, logo_sprite.GetY() + logo_image.GetHeight() + 20, 0);
-progress.SetOpacity(1);
-
-# Show message
-message = Text("Starting KioskBook...");
-message.SetPosition(screen_width / 2 - message.GetWidth() / 2, progress.GetY() + 30, 0);
-message.SetColor(1.0, 1.0, 1.0, 1.0);
 EOF
         
         # Update Plymouth configuration
@@ -184,7 +169,7 @@ EOF
             sed -i 's/^Theme=.*/Theme=route19/' /etc/plymouth/plymouthd.conf
         fi
         
-        log_info "Plymouth theme configured"
+        log_info "Plymouth Route 19 theme configured (logo only)"
     else
         log_info "Plymouth not available, skipping theme configuration"
     fi

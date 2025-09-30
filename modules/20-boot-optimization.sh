@@ -41,8 +41,11 @@ configure_grub() {
     # Set GRUB timeout to 0
     sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=0/' /etc/default/grub
     
-    # Optimize kernel parameters
-    sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet loglevel=3 vga=current"/' /etc/default/grub
+    # Optimize kernel parameters for silent boot
+    sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=3 vga=current"/' /etc/default/grub
+    
+    # Hide GRUB menu
+    sed -i 's/^GRUB_CMDLINE_LINUX=.*/GRUB_CMDLINE_LINUX="quiet splash loglevel=3"/' /etc/default/grub
     
     # Update GRUB
     update-grub

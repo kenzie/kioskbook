@@ -55,7 +55,8 @@ install_bootloader_packages() {
         "grub"
         "grub-efi"
         "efibootmgr"
-        "fbsplash"
+        "plymouth"
+        "plymouth-themes"
         "imagemagick"
         "mkinitfs"
         "linux-firmware-amdgpu"
@@ -85,8 +86,8 @@ GRUB_TIMEOUT=0
 GRUB_TIMEOUT_STYLE=hidden
 GRUB_DISTRIBUTOR="KioskBook"
 
-# Silent boot parameters with fbsplash
-GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=0 rd.systemd.show_status=false rd.udev.log_priority=0 systemd.show_status=false fbsplash=route19:silent,theme:route19,tty:8 vt.global_cursor_default=0"
+# Silent boot parameters with Plymouth
+GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=0 rd.systemd.show_status=false rd.udev.log_priority=0 systemd.show_status=false plymouth.ignore-serial-consoles vt.global_cursor_default=0"
 
 # Performance and AMD GPU optimizations
 GRUB_CMDLINE_LINUX="mitigations=off amd_pstate=active amdgpu.dc=1 amdgpu.dpm=1 amdgpu.gpu_recovery=1 amdgpu.runpm=1 amdgpu.bapm=1 radeon.audio=1 radeon.hw_i2c=1 acpi_osi=Linux processor.max_cstate=1 intel_idle.max_cstate=1 clocksource=tsc tsc=reliable no_timer_check noreplace-smp rcu_nocbs=0-7 elevator=mq-deadline usbcore.autosuspend=-1 audit=0 selinux=0 enforcing=0 fsck.mode=skip"
@@ -108,10 +109,10 @@ EOF
 
 # Create custom Plymouth theme
 create_route19_splash() {
-    log_info "Creating Route 19 fbsplash boot theme..."
+    log_info "Creating Route 19 Plymouth boot theme..."
     
-    # Create fbsplash theme directory
-    local theme_dir="$MOUNT_ROOT/etc/splash/route19"
+    # Create Plymouth theme directory
+    local theme_dir="$MOUNT_ROOT/usr/share/plymouth/themes/route19"
     mkdir -p "$theme_dir"
     
     # Create route19-logo.png preparation script
@@ -200,33 +201,32 @@ EOF
     log_success "Route 19 fbsplash theme created"
 }
 
-# Configure fbsplash
-configure_fbsplash() {
-    log_info "Configuring fbsplash boot splash..."
+# Configure Plymouth
+configure_plymouth() {
+    log_info "Configuring Plymouth boot splash..."
     
-    # Configure fbsplash daemon
-    mkdir -p "$MOUNT_ROOT/etc/conf.d"
-    
-    # Create fbsplash configuration
-    cat > "$MOUNT_ROOT/etc/conf.d/fbsplash" << 'EOF'
-# Route 19 fbsplash configuration
-FBSPLASH_THEME="route19"
-FBSPLASH_MODE="silent"
-FBSPLASH_TTY="8"
-EOF
-    
-    # Configure fbsplash service to start early
-    chroot "$MOUNT_ROOT" rc-update add fbsplash boot || {
-        log_warning "Failed to enable fbsplash service"
+    # Set default Plymouth theme
+    chroot "$MOUNT_ROOT" plymouth-set-default-theme spinner || {
+        log_warning "Failed to set Plymouth theme, using default"
     }
     
-    # Configure fbsplash in initramfs
+    # Add Plymouth to initramfs features
     if [[ -f "$MOUNT_ROOT/etc/mkinitfs/mkinitfs.conf" ]]; then
-        # Add fbsplash to features
-        sed -i 's/^features="\(.*\)"/features="\1 fbsplash"/' "$MOUNT_ROOT/etc/mkinitfs/mkinitfs.conf"
+        # Add plymouth to features if not already present
+        if ! grep -q "plymouth" "$MOUNT_ROOT/etc/mkinitfs/mkinitfs.conf"; then
+            sed -i 's/^features="\(.*\)"/features="\1 plymouth"/' "$MOUNT_ROOT/etc/mkinitfs/mkinitfs.conf"
+        fi
     fi
     
-    log_success "fbsplash configured for Route 19 theme"
+    # Rebuild initramfs to include Plymouth
+    local kernel_version=$(chroot "$MOUNT_ROOT" ls /lib/modules/ | head -n1)
+    if [[ -n "$kernel_version" ]]; then
+        chroot "$MOUNT_ROOT" mkinitfs "$kernel_version" || {
+            log_warning "Failed to rebuild initramfs with Plymouth"
+        }
+    fi
+    
+    log_success "Plymouth configured for boot splash"
 }
 
 # Optimize initramfs
@@ -236,7 +236,7 @@ optimize_initramfs() {
     # Configure mkinitfs for minimal initramfs
     cat > "$MOUNT_ROOT/etc/mkinitfs/mkinitfs.conf" << 'EOF'
 # KioskBook optimized initramfs configuration
-features="ata base ext4 keymap kms mmc raid scsi usb virtio nvme fbsplash"
+features="ata base ext4 keymap kms mmc raid scsi usb virtio nvme plymouth"
 EOF
     
     # Create initramfs hooks for optimization
@@ -614,11 +614,11 @@ validate_boot_config() {
         exit 1
     fi
     
-    # Check fbsplash theme
-    if [[ -f "$MOUNT_ROOT/etc/splash/route19/background.png" ]]; then
-        log_info "Route 19 fbsplash theme installed"
+    # Check Plymouth installation
+    if chroot "$MOUNT_ROOT" command -v plymouth >/dev/null 2>&1; then
+        log_info "Plymouth boot splash installed"
     else
-        log_warning "Route 19 fbsplash theme not found"
+        log_warning "Plymouth not found"
     fi
     
     log_success "Boot configuration validation passed"
@@ -634,7 +634,7 @@ main() {
     install_bootloader_packages
     configure_kernel_parameters
     create_route19_splash
-    configure_fbsplash
+    configure_plymouth
     optimize_initramfs
     configure_watchdog
     optimize_services

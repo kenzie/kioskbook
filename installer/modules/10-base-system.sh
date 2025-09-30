@@ -76,12 +76,19 @@ setup_repositories() {
     local repo_file="$MOUNT_ROOT/etc/apk/repositories"
     mkdir -p "$(dirname "$repo_file")"
     
+    # Use the same version as the host system
+    local alpine_version
+    if [[ -f /etc/alpine-release ]]; then
+        alpine_version="v$(cat /etc/alpine-release | cut -d. -f1,2)"
+        log_info "Detected Alpine version: $alpine_version"
+    else
+        alpine_version="v3.22"
+        log_warning "Could not detect Alpine version, using $alpine_version"
+    fi
+    
     cat > "$repo_file" << EOF
-$ALPINE_MIRROR/v3.18/main
-$ALPINE_MIRROR/v3.18/community
-$ALPINE_MIRROR/edge/main
-$ALPINE_MIRROR/edge/community
-$ALPINE_MIRROR/edge/testing
+$ALPINE_MIRROR/${alpine_version}/main
+$ALPINE_MIRROR/${alpine_version}/community
 EOF
     
     log_success "Repository configuration created"

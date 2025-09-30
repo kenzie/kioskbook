@@ -145,24 +145,12 @@ get_disk_info() {
     fi
 }
 
-# Prompt for Tailscale key if not provided
+# Skip Tailscale key prompt - install and configure later via SSH
 prompt_tailscale_key() {
-    if [[ -z "$TAILSCALE_KEY" ]]; then
-        echo ""
-        log_info "Tailscale authentication key required for remote management"
-        log_info "Get your key from: https://login.tailscale.com/admin/settings/keys"
-        echo ""
-        read -p "Enter Tailscale auth key: " TAILSCALE_KEY
-        
-        if [[ -z "$TAILSCALE_KEY" ]]; then
-            log_warning "No Tailscale key provided. Remote management will be limited."
-            read -p "Continue without Tailscale? (y/N): " confirm
-            if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-                log_info "Installation cancelled by user"
-                exit 0
-            fi
-        fi
-    fi
+    log_info "Tailscale will be installed but not authenticated during installation"
+    log_info "Configure Tailscale after installation via SSH:"
+    log_info "  sudo tailscale up --auth-key=<your-key>"
+    TAILSCALE_KEY=""  # Always empty, handled post-install
 }
 
 # Show installation summary
@@ -182,11 +170,7 @@ show_installation_summary() {
     echo ""
     echo -e "${CYAN}Application Configuration:${NC}"
     echo -e "  GitHub Repository: ${YELLOW}$GITHUB_REPO${NC}"
-    if [[ -n "$TAILSCALE_KEY" ]]; then
-        echo -e "  Tailscale: ${GREEN}Enabled${NC}"
-    else
-        echo -e "  Tailscale: ${RED}Disabled${NC}"
-    fi
+    echo -e "  Tailscale: ${YELLOW}Install Only (configure via SSH)${NC}"
     echo ""
     echo -e "${CYAN}Installation Modules:${NC}"
     
@@ -315,12 +299,12 @@ installation_complete() {
     echo -e "  3. ${YELLOW}Kiosk application will start automatically${NC}"
     echo ""
     
-    if [[ -n "$TAILSCALE_KEY" ]]; then
-        echo -e "${CYAN}Remote management:${NC}"
-        echo -e "  - SSH access via Tailscale network"
-        echo -e "  - Check Tailscale admin console for device"
-        echo ""
-    fi
+    echo -e "${CYAN}Remote management setup:${NC}"
+    echo -e "  1. ${YELLOW}SSH to system via local network first${NC}"
+    echo -e "  2. ${YELLOW}sudo tailscale up --auth-key=<your-key>${NC}"
+    echo -e "  3. ${YELLOW}Then SSH via Tailscale network${NC}"
+    echo -e "  Get auth key: https://login.tailscale.com/admin/settings/keys"
+    echo ""
     
     echo -e "${CYAN}Management commands:${NC}"
     echo -e "  - ${YELLOW}rc-status${NC} - View service status"

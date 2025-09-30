@@ -594,23 +594,29 @@ generate_initramfs() {
     if [[ ! -d "$MOUNT_ROOT/lib/modules" ]]; then
         log_warning "Kernel modules directory not found, installing kernel..."
         
-        # Ensure proper repository configuration and update cache
-        log_info "Updating package cache and fixing repository configuration..."
+        # Use host's working repositories if they exist, otherwise configure new ones
+        log_info "Configuring repositories for kernel installation..."
         
-        # Detect actual Alpine version and configure repositories
-        local alpine_version
-        if [[ -f "/etc/alpine-release" ]]; then
-            alpine_version="v$(cat /etc/alpine-release | cut -d. -f1,2)"
-            log_info "Detected host Alpine version: $alpine_version"
+        if [[ -f "/etc/apk/repositories" ]]; then
+            log_info "Copying working repositories from host system..."
+            cp "/etc/apk/repositories" "$MOUNT_ROOT/etc/apk/repositories"
         else
-            alpine_version="v3.19"  # Safe fallback
-            log_warning "Could not detect Alpine version, using $alpine_version"
-        fi
-        
-        cat > "$MOUNT_ROOT/etc/apk/repositories" << EOF
+            # Detect actual Alpine version and configure repositories
+            local alpine_version
+            if [[ -f "/etc/alpine-release" ]]; then
+                alpine_version="v$(cat /etc/alpine-release | cut -d. -f1,2)"
+                log_info "Detected host Alpine version: $alpine_version"
+            else
+                alpine_version="v3.22"  # Default to 3.22 since that's what you have
+                log_warning "Could not detect Alpine version, using $alpine_version"
+            fi
+            
+            log_info "Setting up repositories for $alpine_version..."
+            cat > "$MOUNT_ROOT/etc/apk/repositories" << EOF
 http://dl-cdn.alpinelinux.org/alpine/${alpine_version}/main
 http://dl-cdn.alpinelinux.org/alpine/${alpine_version}/community
 EOF
+        fi
         
         # Clear and rebuild package cache
         chroot "$MOUNT_ROOT" rm -rf /var/cache/apk/*

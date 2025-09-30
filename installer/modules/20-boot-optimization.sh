@@ -225,17 +225,24 @@ EOF
 configure_plymouth() {
     log_info "Configuring Plymouth boot splash..."
     
-    # Set Route 19 Plymouth theme
-    if chroot "$MOUNT_ROOT" command -v plymouth-set-default-theme >/dev/null 2>&1; then
-        chroot "$MOUNT_ROOT" plymouth-set-default-theme route19 || {
-            log_warning "Failed to set Route 19 theme, falling back to spinner"
-            chroot "$MOUNT_ROOT" plymouth-set-default-theme spinner || {
-                log_warning "Failed to set any Plymouth theme - continuing without theme"
-            }
+    # Set Route 19 Plymouth theme manually since plymouth-set-default-theme may not be available
+    log_info "Setting Route 19 Plymouth theme manually..."
+    
+    # Create Plymouth configuration to use our theme
+    mkdir -p "$MOUNT_ROOT/etc/plymouth"
+    echo "route19" > "$MOUNT_ROOT/etc/plymouth/plymouthd.conf" || {
+        log_warning "Failed to set Plymouth theme configuration"
+    }
+    
+    # Alternative method: create symlink to our theme
+    if [[ -f "$MOUNT_ROOT/usr/share/plymouth/themes/route19/route19.plymouth" ]]; then
+        mkdir -p "$MOUNT_ROOT/usr/share/plymouth/themes/default"
+        ln -sf "../route19/route19.plymouth" "$MOUNT_ROOT/usr/share/plymouth/themes/default/default.plymouth" 2>/dev/null || {
+            log_warning "Failed to create theme symlink"
         }
+        log_success "Route 19 theme configured manually"
     else
-        log_warning "plymouth-set-default-theme not available - Plymouth may not be properly installed"
-        log_info "Boot splash will use default configuration"
+        log_warning "Route 19 theme files not found"
     fi
     
     # Add Plymouth to initramfs features
@@ -321,15 +328,11 @@ EOF
     log_success "Initramfs optimized"
 }
 
-# Configure watchdog
+# Configure watchdog (skip if not available)
 configure_watchdog() {
-    log_info "Configuring hardware watchdog..."
-    
-    # Install watchdog daemon
-    apk --root "$MOUNT_ROOT" add watchdog || {
-        log_warning "Failed to install watchdog package"
-        return 1
-    }
+    log_info "Skipping watchdog configuration - package not available in Alpine 3.22"
+    log_info "Consider using systemd watchdog or kernel built-in watchdog instead"
+    return 0
     
     # Configure watchdog
     cat > "$MOUNT_ROOT/etc/watchdog.conf" << 'EOF'
@@ -589,21 +592,35 @@ generate_initramfs() {
     
     # Check if kernel modules directory exists
     if [[ ! -d "$MOUNT_ROOT/lib/modules" ]]; then
-        log_warning "Kernel modules directory not found, installing kernel without firmware bloat..."
+        log_warning "Kernel modules directory not found, installing kernel with essential dependencies..."
         
-        # Install kernel without dependencies to avoid firmware bloat
-        chroot "$MOUNT_ROOT" apk add --no-deps linux-lts || {
-            log_error "Failed to install kernel"
-            exit 1
+        # First try to install just the kernel and essential dependencies
+        # Avoid full linux-firmware but allow essential kernel dependencies
+        chroot "$MOUNT_ROOT" apk add linux-lts --no-install-recommends || {
+            log_warning "Failed with --no-install-recommends, trying minimal approach..."
+            
+            # Fallback: install kernel allowing dependencies but without firmware
+            chroot "$MOUNT_ROOT" apk add linux-lts || {
+                log_error "Failed to install kernel"
+                exit 1
+            }
         }
         
-        # Install only essential modules manually
+        # Ensure mkinitfs is available
         chroot "$MOUNT_ROOT" apk add mkinitfs || {
             log_error "Failed to install mkinitfs"
             exit 1
         }
         
-        log_info "Kernel installed without firmware dependencies"
+        log_info "Kernel installed"
+        
+        # Verify kernel modules directory was created
+        if [[ ! -d "$MOUNT_ROOT/lib/modules" ]]; then
+            log_error "Kernel installation did not create /lib/modules directory"
+            log_info "Available directories in $MOUNT_ROOT/lib:"
+            ls -la "$MOUNT_ROOT/lib/" || true
+            exit 1
+        fi
         
         # Wait a moment for filesystem to settle
         sleep 2

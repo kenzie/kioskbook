@@ -69,6 +69,45 @@ set_partition_paths() {
     log_info "  Data: $DATA_PARTITION (remainder)"
 }
 
+# Force unmount existing partitions to ensure clean slate
+force_unmount_existing() {
+    log_info "Ensuring clean slate by unmounting any existing partitions..."
+    
+    # Unmount all possible partitions from this disk
+    local unmounted=false
+    
+    # Check all partitions that might exist on the target disk
+    for part in "${TARGET_DISK}"*[0-9]; do
+        if [[ -b "$part" ]]; then
+            # Check if partition is mounted
+            local mount_point=$(findmnt -n -o TARGET "$part" 2>/dev/null || echo "")
+            if [[ -n "$mount_point" ]]; then
+                log_info "Unmounting $part from $mount_point"
+                if umount "$part" 2>/dev/null; then
+                    log_success "Successfully unmounted $part"
+                    unmounted=true
+                else
+                    log_warning "Failed to unmount $part, trying force unmount..."
+                    if umount -f "$part" 2>/dev/null; then
+                        log_success "Force unmounted $part"
+                        unmounted=true
+                    else
+                        log_error "Cannot unmount $part - may be in use by system"
+                        exit 1
+                    fi
+                fi
+            fi
+        fi
+    done
+    
+    if $unmounted; then
+        log_info "Waiting 2 seconds for filesystem to settle..."
+        sleep 2
+    fi
+    
+    log_success "All existing partitions unmounted, ready for fresh installation"
+}
+
 # Check if required tools are available
 check_required_tools() {
     local tools=("parted" "mkfs.ext4" "blkid" "wipefs")
@@ -413,6 +452,7 @@ main() {
     
     validate_environment
     set_partition_paths
+    force_unmount_existing
     check_required_tools
     confirm_disk_wipe
     wipe_disk

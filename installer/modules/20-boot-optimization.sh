@@ -129,86 +129,48 @@ create_route19_splash() {
     local theme_dir="$MOUNT_ROOT/usr/share/plymouth/themes/route19"
     mkdir -p "$theme_dir"
     
-    # Create route19-logo.png preparation script
-    cat > "$MOUNT_ROOT/tmp/create_route19_logo.sh" << 'EOF'
-#!/bin/bash
-# Create Route 19 logo for boot splash
-# This creates a placeholder - replace with actual Route 19 logo file
-
-cd /tmp
-
-# Debug: Check what logo files are available
-echo "Checking for Route 19 logo files..."
-ls -la /opt/route19-logo.png 2>/dev/null && echo "Found logo at /opt/route19-logo.png" || echo "No logo at /opt/route19-logo.png"
-ls -la /data/route19-logo.png 2>/dev/null && echo "Found logo at /data/route19-logo.png" || echo "No logo at /data/route19-logo.png"  
-ls -la /tmp/route19-logo-for-install.png 2>/dev/null && echo "Found logo at /tmp/route19-logo-for-install.png" || echo "No logo at /tmp/route19-logo-for-install.png"
-
-# Check if actual Route 19 logo exists (check multiple locations)
-if [[ -f "/tmp/route19-logo-for-install.png" ]]; then
-    echo "Using Route 19 logo from host temp location..."
-    cp "/tmp/route19-logo-for-install.png" "./route19-logo.png" || {
-        echo "Failed to copy logo from /tmp - creating fallback"
-        echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChAI9jU77gwAAAABJRU5ErkJggg==" | base64 -d > "./route19-logo.png"
-    }
-elif [[ -f "/opt/route19-logo.png" ]]; then
-    echo "Using provided Route 19 logo..."
-    cp "/opt/route19-logo.png" "./route19-logo.png" || {
-        echo "Failed to copy logo from /opt - creating fallback"
-        echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChAI9jU77gwAAAABJRU5ErkJggg==" | base64 -d > "./route19-logo.png"
-    }
-elif [[ -f "/data/route19-logo.png" ]]; then
-    echo "Using Route 19 logo from data partition..."
-    cp "/data/route19-logo.png" "./route19-logo.png" || {
-        echo "Failed to copy logo from /data - creating fallback"
-        echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChAI9jU77gwAAAABJRU5ErkJggg==" | base64 -d > "./route19-logo.png"
-    }
-else
-    echo "No Route 19 logo found in any location - creating fallback..."
-    # Create a placeholder logo with Route 19 text
-    if command -v convert >/dev/null 2>&1; then
-        convert -size 400x200 xc:transparent \
-                -font Liberation-Sans-Bold -pointsize 48 -fill white \
-                -gravity center -annotate +0-20 "ROUTE 19" \
-                -pointsize 24 -annotate +0+30 "Digital Signage Platform" \
-                "./route19-logo.png"
-    else
-        # Fallback: minimal 1x1 transparent PNG
-        echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChAI9jU77gwAAAABJRU5ErkJggg==" | base64 -d > "./route19-logo.png"
+    # Create Route 19 logo directly (avoid separate script file)
+    log_info "Setting up Route 19 logo for Plymouth theme..."
+    
+    # Create Plymouth theme directory
+    mkdir -p "$theme_dir"
+    
+    # Check for Route 19 logo in multiple locations and copy directly
+    local logo_found=false
+    
+    # Check host temp location first (from bootstrap)
+    if [[ -f "/tmp/route19-logo-for-install.png" ]]; then
+        log_info "Found Route 19 logo in host temp location"
+        if cp "/tmp/route19-logo-for-install.png" "$theme_dir/logo.png"; then
+            log_success "Route 19 logo copied from host temp location"
+            logo_found=true
+        fi
     fi
-fi
-
-# Copy logo to Plymouth theme directory
-echo "Copying Route 19 logo to Plymouth theme directory..."
-mkdir -p "/usr/share/plymouth/themes/route19"
-if [[ -f "./route19-logo.png" ]]; then
-    cp "./route19-logo.png" "/usr/share/plymouth/themes/route19/logo.png" || {
-        echo "Failed to copy logo to Plymouth directory"
-        exit 1
-    }
-    echo "Logo copied successfully"
-else
-    echo "Error: route19-logo.png not found in /tmp"
-    exit 1
-fi
-
-echo "Route 19 splash theme created successfully"
-EOF
     
-    chmod +x "$MOUNT_ROOT/tmp/create_route19_logo.sh"
+    # Check mounted opt directory
+    if ! $logo_found && [[ -f "$MOUNT_ROOT/opt/route19-logo.png" ]]; then
+        log_info "Found Route 19 logo in mounted /opt"
+        if cp "$MOUNT_ROOT/opt/route19-logo.png" "$theme_dir/logo.png"; then
+            log_success "Route 19 logo copied from mounted /opt"
+            logo_found=true
+        fi
+    fi
     
-    # Run the logo creation script
-    if chroot "$MOUNT_ROOT" /tmp/create_route19_logo.sh; then
-        log_success "Route 19 logo created successfully"
-    else
-        log_error "Failed to create Route 19 logo - this will affect boot display"
-        log_error "Ensure route19-logo.png exists in repository and ImageMagick is available"
-        # Create minimal placeholder to prevent Plymouth errors
-        mkdir -p "$theme_dir"
+    # Check data partition
+    if ! $logo_found && [[ -f "$MOUNT_DATA/route19-logo.png" ]]; then
+        log_info "Found Route 19 logo on data partition" 
+        if cp "$MOUNT_DATA/route19-logo.png" "$theme_dir/logo.png"; then
+            log_success "Route 19 logo copied from data partition"
+            logo_found=true
+        fi
+    fi
+    
+    # Create fallback if no logo found
+    if ! $logo_found; then
+        log_warning "No Route 19 logo found - creating minimal placeholder"
+        # Create minimal 1x1 PNG to prevent Plymouth errors
         touch "$theme_dir/logo.png"
     fi
-    
-    # Clean up
-    rm -f "$MOUNT_ROOT/tmp/create_route19_logo.sh"
     
     # Create Plymouth theme configuration
     cat > "$theme_dir/route19.plymouth" << 'EOF'

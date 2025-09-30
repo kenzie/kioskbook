@@ -104,7 +104,7 @@ RestartSec=10
 WantedBy=multi-user.target
 EOF
     else
-        # Serve in dev mode
+        # Serve in dev mode with correct Vite configuration
         cat > /etc/systemd/system/kiosk-app.service << EOF
 [Unit]
 Description=Kiosk Vue.js Application
@@ -114,11 +114,9 @@ After=network.target
 Type=simple
 User=root
 WorkingDirectory=$APP_DIR
-ExecStart=/usr/bin/npm run dev
+ExecStart=/usr/bin/npm run dev -- --host 0.0.0.0 --port 3000
 Restart=always
 RestartSec=10
-Environment="HOST=0.0.0.0"
-Environment="PORT=3000"
 
 [Install]
 WantedBy=multi-user.target

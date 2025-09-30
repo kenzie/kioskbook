@@ -69,20 +69,28 @@ create_boot_splash_script() {
 #!/bin/sh
 # KioskBook Boot Splash Screen - Route 19 Logo Only
 
-# Clear screen to black
+# Clear screen to black and disable cursor
 clear
-echo -e "\033[2J\033[H"
+echo -e "\033[2J\033[H\033[?25l"
 
-# Display Route 19 logo on framebuffer (centered on black background)
+# Wait a moment for system to stabilize
+sleep 1
+
+# Display Route 19 logo on framebuffer
 if [ -c /dev/fb0 ] && [ -f /usr/share/kioskbook/route19-logo.png ]; then
-    # Use fbi to display logo centered on black background
-    fbi -d /dev/fb0 -T 1 -noverbose /usr/share/kioskbook/route19-logo.png &
-    sleep 3
+    # Use fbi to display logo on framebuffer
+    fbi -d /dev/fb0 -T 1 -noverbose /usr/share/kioskbook/route19-logo.png 2>/dev/null &
+    FBI_PID=$!
+    sleep 4
+    kill $FBI_PID 2>/dev/null
     killall fbi 2>/dev/null
 else
-    # Fallback: show black screen briefly if no logo available
-    sleep 1
+    # Fallback: show black screen
+    sleep 2
 fi
+
+# Re-enable cursor
+echo -e "\033[?25h"
 EOF
     
     chmod +x "$SPLASH_DIR/boot-splash.sh"

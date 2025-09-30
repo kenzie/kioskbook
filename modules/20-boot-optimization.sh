@@ -41,11 +41,15 @@ configure_grub() {
     # Set GRUB timeout to 0
     sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=0/' /etc/default/grub
     
-    # Optimize kernel parameters for silent boot
-    sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=3 vga=current"/' /etc/default/grub
+    # Optimize kernel parameters for completely silent boot
+    sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=0 rd.systemd.show_status=false rd.udev.log_priority=0 vga=current"/' /etc/default/grub
+    
+    # Hide GRUB menu completely
+    sed -i 's/^GRUB_CMDLINE_LINUX=.*/GRUB_CMDLINE_LINUX="quiet splash loglevel=0"/' /etc/default/grub
     
     # Hide GRUB menu
-    sed -i 's/^GRUB_CMDLINE_LINUX=.*/GRUB_CMDLINE_LINUX="quiet splash loglevel=3"/' /etc/default/grub
+    sed -i 's/^#GRUB_HIDDEN_TIMEOUT=.*/GRUB_HIDDEN_TIMEOUT=0/' /etc/default/grub
+    sed -i 's/^#GRUB_HIDDEN_TIMEOUT_QUIET=.*/GRUB_HIDDEN_TIMEOUT_QUIET=true/' /etc/default/grub
     
     # Update GRUB
     update-grub
@@ -95,6 +99,7 @@ optimize_systemd() {
 DefaultTimeoutStartSec=10s
 DefaultTimeoutStopSec=5s
 DefaultRestartSec=100ms
+ShowStatus=no
 EOF
     
     # Optimize journald
@@ -104,6 +109,14 @@ EOF
 Storage=volatile
 SystemMaxUse=50M
 RuntimeMaxUse=50M
+EOF
+    
+    # Hide systemd boot messages
+    mkdir -p /etc/systemd/system/console-getty.service.d/
+    cat > /etc/systemd/system/console-getty.service.d/override.conf << 'EOF'
+[Service]
+StandardOutput=null
+StandardError=null
 EOF
     
     log_info "Systemd optimization configured"

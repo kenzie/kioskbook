@@ -47,7 +47,7 @@ Wants=graphical-session.target
 Type=simple
 User=kiosk
 Environment=DISPLAY=:0
-ExecStart=/bin/bash -c 'sleep 5 && /usr/bin/chromium --kiosk --start-fullscreen --noerrdialogs --disable-infobars --no-first-run --disable-session-crashed-bubble --disable-features=TranslateUI --check-for-update-interval=31536000 --disable-http-cache --disable-cache --disk-cache-size=1 --window-position=0,0 --disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows http://localhost:3000'
+ExecStart=/bin/bash -c 'sleep 5 && /usr/bin/chromium --kiosk --start-fullscreen --noerrdialogs --disable-infobars --no-first-run --disable-session-crashed-bubble --disable-features=TranslateUI --check-for-update-interval=31536000 --disable-http-cache --disable-cache --disk-cache-size=1 --window-position=0,0 --disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows --disable-gpu-vsync --enable-gpu-rasterization --enable-zero-copy --enable-native-gpu-memory-buffers --enable-hardware-overlays --enable-accelerated-2d-canvas --enable-accelerated-video-decode http://localhost:3000'
 Restart=always
 RestartSec=10
 

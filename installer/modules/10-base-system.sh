@@ -418,7 +418,7 @@ validate_installation() {
         "$MOUNT_ROOT/etc/hostname"
         "$MOUNT_ROOT/etc/fstab"
         "$MOUNT_ROOT/etc/timezone"
-        "$MOUNT_ROOT/home/kiosk/.profile"
+        "$MOUNT_DATA/home/kiosk/.profile"
         "$MOUNT_ROOT/etc/rc.conf"
     )
     

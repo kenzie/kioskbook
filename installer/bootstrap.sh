@@ -167,8 +167,8 @@ EOF
 install_packages() {
     log "Installing required packages..."
     
-    # List of required packages
-    packages="bash git curl parted"
+    # List of required packages (including kernel to avoid later issues)
+    packages="bash git curl parted linux-lts mkinitfs"
     
     # Check if packages are already installed (idempotent)
     all_installed=true

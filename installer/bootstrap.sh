@@ -100,22 +100,22 @@ setup_networking() {
 configure_repositories() {
     log "Configuring Alpine package repositories..."
     
+    # Always detect the actual Alpine version first
+    local alpine_version
+    if [ -f "/etc/alpine-release" ]; then
+        alpine_version="v$(cat /etc/alpine-release | cut -d. -f1,2)"
+        log "Detected Alpine version: $alpine_version"
+    else
+        alpine_version="v3.22"  # Default fallback
+        log_warning "Could not detect Alpine version, using $alpine_version"
+    fi
+    
     # Check if repositories are properly configured (not pointing to CD-ROM)
     if grep -q "/media/cdrom" /etc/apk/repositories 2>/dev/null; then
         log "CD-ROM repositories detected, configuring online repositories..."
         
         # Backup existing repositories
         cp /etc/apk/repositories /etc/apk/repositories.backup 2>/dev/null || true
-        
-        # Detect actual Alpine version and configure repositories
-        local alpine_version
-        if [ -f "/etc/alpine-release" ]; then
-            alpine_version="v$(cat /etc/alpine-release | cut -d. -f1,2)"
-            log "Detected Alpine version: $alpine_version"
-        else
-            alpine_version="v3.22"  # Default fallback
-            log_warning "Could not detect Alpine version, using $alpine_version"
-        fi
         
         # Configure proper online repositories for detected version
         cat > /etc/apk/repositories << EOF
@@ -126,18 +126,26 @@ EOF
         
     elif ! grep -q "community" /etc/apk/repositories 2>/dev/null; then
         log "Community repository not enabled, adding..."
-        # Detect Alpine version for community repository
-        local alpine_version
-        if [ -f "/etc/alpine-release" ]; then
-            alpine_version="v$(cat /etc/alpine-release | cut -d. -f1,2)"
-        else
-            alpine_version="v3.22"
-        fi
         echo "http://dl-cdn.alpinelinux.org/alpine/${alpine_version}/community" >> /etc/apk/repositories
         log_success "Community repository enabled"
         
     else
-        log "Repositories already properly configured"
+        # Check if existing repositories match the current Alpine version
+        if ! grep -q "${alpine_version}" /etc/apk/repositories 2>/dev/null; then
+            log "Existing repositories don't match Alpine ${alpine_version}, updating..."
+            
+            # Backup existing repositories
+            cp /etc/apk/repositories /etc/apk/repositories.backup 2>/dev/null || true
+            
+            # Configure correct repositories for detected version
+            cat > /etc/apk/repositories << EOF
+http://dl-cdn.alpinelinux.org/alpine/${alpine_version}/main
+http://dl-cdn.alpinelinux.org/alpine/${alpine_version}/community
+EOF
+            log_success "Repositories updated to match Alpine ${alpine_version}"
+        else
+            log "Repositories already properly configured for Alpine ${alpine_version}"
+        fi
     fi
 }
 

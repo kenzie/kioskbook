@@ -42,27 +42,21 @@ BASE_PACKAGES=(
     "linux-lts"
 )
 
-# Essential kiosk packages (must install)
+# Absolute minimum for basic functionality
 KIOSK_ESSENTIAL=(
     "nodejs"
     "npm"
-    "xorg-server"
-    "eudev"
-    "dbus"
-    "elogind"
 )
 
-# Display and graphics packages (minimal)
+# Display system (bare minimum)
 KIOSK_GRAPHICS=(
-    "xf86-video-amdgpu"
+    "xorg-server"
     "xf86-input-libinput"
-    "mesa-dri-gallium"
 )
 
-# Browser and minimal fonts
+# Browser only (skip for first successful install)
 KIOSK_BROWSER=(
-    "chromium"
-    "ttf-dejavu"
+    # Skip Chromium for now - just get basic system working
 )
 
 # Hardware-specific firmware (install only if hardware detected)
@@ -70,11 +64,16 @@ KIOSK_FIRMWARE=(
     "linux-firmware-amdgpu"
 )
 
-# Optional packages
+# System services (essential for boot)
+KIOSK_SERVICES=(
+    "eudev"
+    "dbus"
+    "elogind"
+)
+
+# Optional packages (skip for first install)
 KIOSK_OPTIONAL=(
-    "polkit"
-    "xf86-input-evdev"
-    "font-noto"
+    # Skip all optional packages for now
 )
 
 log_info "Starting base system setup module..."
@@ -163,45 +162,43 @@ install_kiosk_packages() {
     }
     log_success "Essential kiosk packages installed"
     
-    # Stage 2: Graphics packages
-    log_info "Installing graphics and display packages..."
-    apk --root "$MOUNT_ROOT" add "${KIOSK_GRAPHICS[@]}" || {
-        log_error "Failed to install graphics packages"
+    # Stage 2: System services
+    log_info "Installing essential system services..."
+    apk --root "$MOUNT_ROOT" add "${KIOSK_SERVICES[@]}" || {
+        log_error "Failed to install system services"
         exit 1
     }
-    log_success "Graphics packages installed"
+    log_success "System services installed"
     
-    # Stage 3: Browser and fonts (largest)
-    log_info "Installing browser and fonts (this may take a while)..."
-    apk --root "$MOUNT_ROOT" add "${KIOSK_BROWSER[@]}" || {
-        log_error "Failed to install browser packages"
-        exit 1
-    }
-    log_success "Browser packages installed"
-    
-    # Stage 4: Hardware-specific firmware (only if AMD GPU detected)
-    if lspci | grep -qi "amd\|radeon"; then
-        log_info "AMD GPU detected, installing AMD firmware..."
-        for pkg in "${KIOSK_FIRMWARE[@]}"; do
-            if ! apk --root "$MOUNT_ROOT" add "$pkg" 2>/dev/null; then
-                log_warning "AMD firmware package '$pkg' failed to install"
-            else
-                log_success "AMD firmware package '$pkg' installed"
-            fi
-        done
+    # Stage 3: Graphics packages
+    log_info "Installing minimal graphics and display..."
+    if [[ ${#KIOSK_GRAPHICS[@]} -gt 0 ]]; then
+        apk --root "$MOUNT_ROOT" add "${KIOSK_GRAPHICS[@]}" || {
+            log_error "Failed to install graphics packages"
+            exit 1
+        }
+        log_success "Graphics packages installed"
     else
-        log_info "No AMD GPU detected, skipping AMD firmware"
+        log_info "No graphics packages configured"
     fi
     
-    # Stage 5: Optional packages (with warnings on failure)
-    log_info "Installing optional packages..."
-    for pkg in "${KIOSK_OPTIONAL[@]}"; do
-        if ! apk --root "$MOUNT_ROOT" add "$pkg" 2>/dev/null; then
-            log_warning "Optional package '$pkg' failed to install"
-        else
-            log_info "Optional package '$pkg' installed"
-        fi
-    done
+    # Stage 4: Browser (skip for now)
+    if [[ ${#KIOSK_BROWSER[@]} -gt 0 ]]; then
+        log_info "Installing browser packages..."
+        apk --root "$MOUNT_ROOT" add "${KIOSK_BROWSER[@]}" || {
+            log_error "Failed to install browser packages"
+            exit 1
+        }
+        log_success "Browser packages installed"
+    else
+        log_info "Browser packages skipped for minimal install"
+    fi
+    
+    # Stage 5: Hardware-specific firmware (skip for minimal install)
+    log_info "Skipping firmware for minimal install"
+    
+    # Stage 6: Optional packages (skip for minimal install)
+    log_info "Skipping optional packages for minimal install"
     
     log_success "Kiosk packages installation completed"
 }

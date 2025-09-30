@@ -63,6 +63,7 @@ install_bootloader_packages() {
     # Optional packages that may fail on some systems
     local optional_packages=(
         "grub-efi"
+        "grub-bios" 
         "efibootmgr"
         "imagemagick"
         "linux-firmware-amdgpu"
@@ -139,10 +140,17 @@ cd /tmp
 # Debug: Check what logo files are available
 echo "Checking for Route 19 logo files..."
 ls -la /opt/route19-logo.png 2>/dev/null && echo "Found logo at /opt/route19-logo.png" || echo "No logo at /opt/route19-logo.png"
-ls -la /data/route19-logo.png 2>/dev/null && echo "Found logo at /data/route19-logo.png" || echo "No logo at /data/route19-logo.png"
+ls -la /data/route19-logo.png 2>/dev/null && echo "Found logo at /data/route19-logo.png" || echo "No logo at /data/route19-logo.png"  
+ls -la /tmp/route19-logo-for-install.png 2>/dev/null && echo "Found logo at /tmp/route19-logo-for-install.png" || echo "No logo at /tmp/route19-logo-for-install.png"
 
-# Check if actual Route 19 logo exists (should be provided during installation)
-if [[ -f "/opt/route19-logo.png" ]]; then
+# Check if actual Route 19 logo exists (check multiple locations)
+if [[ -f "/tmp/route19-logo-for-install.png" ]]; then
+    echo "Using Route 19 logo from host temp location..."
+    cp "/tmp/route19-logo-for-install.png" "./route19-logo.png" || {
+        echo "Failed to copy logo from /tmp - creating fallback"
+        echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChAI9jU77gwAAAABJRU5ErkJggg==" | base64 -d > "./route19-logo.png"
+    }
+elif [[ -f "/opt/route19-logo.png" ]]; then
     echo "Using provided Route 19 logo..."
     cp "/opt/route19-logo.png" "./route19-logo.png" || {
         echo "Failed to copy logo from /opt - creating fallback"
@@ -155,7 +163,7 @@ elif [[ -f "/data/route19-logo.png" ]]; then
         echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChAI9jU77gwAAAABJRU5ErkJggg==" | base64 -d > "./route19-logo.png"
     }
 else
-    echo "No Route 19 logo found - creating fallback..."
+    echo "No Route 19 logo found in any location - creating fallback..."
     # Create a placeholder logo with Route 19 text
     if command -v convert >/dev/null 2>&1; then
         convert -size 400x200 xc:transparent \
@@ -169,17 +177,18 @@ else
     fi
 fi
 
-# Prepare logo for optimal 1920x1080 display with black background
-if command -v convert >/dev/null 2>&1; then
-    echo "Resizing Route 19 logo for 1920x1080 display..."
-    convert "./route19-logo.png" \
-            -background black \
-            -gravity center \
-            -extent 1920x1080 \
-            "/usr/share/plymouth/themes/route19/logo.png"
+# Copy logo to Plymouth theme directory
+echo "Copying Route 19 logo to Plymouth theme directory..."
+mkdir -p "/usr/share/plymouth/themes/route19"
+if [[ -f "./route19-logo.png" ]]; then
+    cp "./route19-logo.png" "/usr/share/plymouth/themes/route19/logo.png" || {
+        echo "Failed to copy logo to Plymouth directory"
+        exit 1
+    }
+    echo "Logo copied successfully"
 else
-    echo "ImageMagick not available, using logo as-is..."
-    cp "./route19-logo.png" "/usr/share/plymouth/themes/route19/logo.png"
+    echo "Error: route19-logo.png not found in /tmp"
+    exit 1
 fi
 
 echo "Route 19 splash theme created successfully"
@@ -583,21 +592,30 @@ install_grub() {
             }
         fi
         
-        if chroot "$MOUNT_ROOT" grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=KioskBook --recheck; then
+        # Try EFI installation with better error handling
+        if chroot "$MOUNT_ROOT" grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=KioskBook --recheck --force; then
             log_success "GRUB EFI installed successfully"
         else
             log_warning "EFI installation failed, falling back to BIOS mode"
-            chroot "$MOUNT_ROOT" grub-install --target=i386-pc --recheck "$TARGET_DISK" || {
+            # Force BIOS installation
+            if chroot "$MOUNT_ROOT" grub-install --target=i386-pc --boot-directory=/boot --recheck --force "$TARGET_DISK"; then
+                log_success "GRUB BIOS installed successfully (fallback from EFI)"
+            else
                 log_error "Failed to install GRUB in both EFI and BIOS modes"
+                log_error "Check if grub-bios package is installed and target disk is correct: $TARGET_DISK"
                 exit 1
-            }
+            fi
         fi
     else
         # BIOS installation
-        chroot "$MOUNT_ROOT" grub-install --target=i386-pc --recheck "$TARGET_DISK" || {
+        log_info "Installing GRUB for BIOS boot mode..."
+        if chroot "$MOUNT_ROOT" grub-install --target=i386-pc --boot-directory=/boot --recheck --force "$TARGET_DISK"; then
+            log_success "GRUB BIOS installed successfully"
+        else
             log_error "Failed to install GRUB BIOS"
+            log_error "Check if grub-bios package is installed and target disk is correct: $TARGET_DISK"
             exit 1
-        }
+        fi
     fi
     
     # Generate GRUB configuration

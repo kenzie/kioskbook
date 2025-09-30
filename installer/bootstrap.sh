@@ -214,14 +214,17 @@ clone_repository() {
 setup_route19_logo() {
     log "Setting up Route 19 logo..."
     
+    # Copy to both host system and prepare for chroot
     LOGO_DEST="/opt/route19-logo.png"
+    LOGO_TEMP="/tmp/route19-logo-for-install.png"
     
-    # Create destination directory
+    # Create destination directories
     mkdir -p "$(dirname "$LOGO_DEST")"
     
     # Check for Route 19 logo in repository (primary location)
     if [ -f "$WORK_DIR/route19-logo.png" ]; then
         cp "$WORK_DIR/route19-logo.png" "$LOGO_DEST"
+        cp "$WORK_DIR/route19-logo.png" "$LOGO_TEMP"
         log_success "Route 19 logo copied from repository root"
         return 0
     fi
@@ -229,6 +232,7 @@ setup_route19_logo() {
     # Check for logo in assets directory (secondary location)
     if [ -f "$WORK_DIR/assets/route19-logo.png" ]; then
         cp "$WORK_DIR/assets/route19-logo.png" "$LOGO_DEST"
+        cp "$WORK_DIR/assets/route19-logo.png" "$LOGO_TEMP"
         log_success "Route 19 logo copied from repository assets"
         return 0
     fi

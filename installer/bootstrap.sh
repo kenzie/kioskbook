@@ -107,16 +107,33 @@ configure_repositories() {
         # Backup existing repositories
         cp /etc/apk/repositories /etc/apk/repositories.backup 2>/dev/null || true
         
-        # Configure proper online repositories
-        cat > /etc/apk/repositories << 'EOF'
-http://dl-cdn.alpinelinux.org/alpine/v3.19/main
-http://dl-cdn.alpinelinux.org/alpine/v3.19/community
+        # Detect actual Alpine version and configure repositories
+        local alpine_version
+        if [ -f "/etc/alpine-release" ]; then
+            alpine_version="v$(cat /etc/alpine-release | cut -d. -f1,2)"
+            log "Detected Alpine version: $alpine_version"
+        else
+            alpine_version="v3.22"  # Default fallback
+            log_warning "Could not detect Alpine version, using $alpine_version"
+        fi
+        
+        # Configure proper online repositories for detected version
+        cat > /etc/apk/repositories << EOF
+http://dl-cdn.alpinelinux.org/alpine/${alpine_version}/main
+http://dl-cdn.alpinelinux.org/alpine/${alpine_version}/community
 EOF
         log_success "Repositories configured to use online mirrors"
         
     elif ! grep -q "community" /etc/apk/repositories 2>/dev/null; then
         log "Community repository not enabled, adding..."
-        echo "http://dl-cdn.alpinelinux.org/alpine/v3.19/community" >> /etc/apk/repositories
+        # Detect Alpine version for community repository
+        local alpine_version
+        if [ -f "/etc/alpine-release" ]; then
+            alpine_version="v$(cat /etc/alpine-release | cut -d. -f1,2)"
+        else
+            alpine_version="v3.22"
+        fi
+        echo "http://dl-cdn.alpinelinux.org/alpine/${alpine_version}/community" >> /etc/apk/repositories
         log_success "Community repository enabled"
         
     else
@@ -141,19 +158,26 @@ update_repositories() {
     if ! apk update; then
         log_warning "Failed to update with primary mirrors, trying alternatives..."
         
-        # Try alternative mirrors
-        cat > /etc/apk/repositories << 'EOF'
-http://mirror.leaseweb.com/alpine/v3.19/main
-http://mirror.leaseweb.com/alpine/v3.19/community
+        # Try alternative mirrors with correct version
+        local alpine_version
+        if [ -f "/etc/alpine-release" ]; then
+            alpine_version="v$(cat /etc/alpine-release | cut -d. -f1,2)"
+        else
+            alpine_version="v3.22"
+        fi
+        
+        cat > /etc/apk/repositories << EOF
+http://mirror.leaseweb.com/alpine/${alpine_version}/main
+http://mirror.leaseweb.com/alpine/${alpine_version}/community
 EOF
         
         if apk update; then
             log_success "Package repositories updated using alternative mirrors"
         else
             # Try HTTPS mirrors as last resort
-            cat > /etc/apk/repositories << 'EOF'
-https://alpine.global.ssl.fastly.net/alpine/v3.19/main
-https://alpine.global.ssl.fastly.net/alpine/v3.19/community
+            cat > /etc/apk/repositories << EOF
+https://alpine.global.ssl.fastly.net/alpine/${alpine_version}/main
+https://alpine.global.ssl.fastly.net/alpine/${alpine_version}/community
 EOF
             apk update || error_exit "Failed to update package repositories with all available mirrors"
             log_success "Package repositories updated using HTTPS mirrors"

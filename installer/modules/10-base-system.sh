@@ -267,12 +267,26 @@ EOF
     
     # Create persistent directories on data partition
     mkdir -p "$MOUNT_DATA"/{var/cache,var/lib,home,opt}
-    mkdir -p "$MOUNT_DATA/home/kiosk"
     
     # Move kiosk home to data partition
     if [[ -d "$MOUNT_ROOT/home/kiosk" ]]; then
-        cp -r "$MOUNT_ROOT/home/kiosk"/* "$MOUNT_DATA/home/kiosk/" 2>/dev/null || true
+        # Ensure target directory exists
+        mkdir -p "$MOUNT_DATA/home/kiosk"
+        
+        # Copy all files including hidden files (like .profile)
+        cp -r "$MOUNT_ROOT/home/kiosk/." "$MOUNT_DATA/home/kiosk/" || {
+            log_error "Failed to copy kiosk home directory to data partition"
+            exit 1
+        }
+        
+        # Verify .profile was copied
+        if [[ ! -f "$MOUNT_DATA/home/kiosk/.profile" ]]; then
+            log_error "Critical: .profile not copied to data partition"
+            exit 1
+        fi
+        
         rm -rf "$MOUNT_ROOT/home/kiosk"
+        log_success "Kiosk home directory moved to data partition"
     fi
     
     # Create necessary tmpfs directories

@@ -603,23 +603,19 @@ generate_initramfs() {
         # Try multiple approaches for kernel installation
         local kernel_installed=false
         
-        # Approach 1: Try with minimal firmware
-        if ! $kernel_installed; then
-            log_info "Attempting kernel installation with minimal dependencies..."
-            if chroot "$MOUNT_ROOT" apk add linux-lts linux-firmware-none 2>/dev/null; then
-                log_success "Kernel installed with minimal firmware"
-                kernel_installed=true
-            fi
-        fi
+        # Approach 1: Try different kernel package names for Alpine 3.22
+        local kernel_packages=("linux-lts" "linux" "linux-edge" "linux-virt")
         
-        # Approach 2: Try without recommends
-        if ! $kernel_installed; then
-            log_info "Attempting kernel installation without recommends..."
-            if chroot "$MOUNT_ROOT" apk add linux-lts --no-install-recommends 2>/dev/null; then
-                log_success "Kernel installed without recommends"
-                kernel_installed=true
+        for kernel_pkg in "${kernel_packages[@]}"; do
+            if ! $kernel_installed; then
+                log_info "Attempting to install $kernel_pkg..."
+                if chroot "$MOUNT_ROOT" apk add "$kernel_pkg" 2>/dev/null; then
+                    log_success "$kernel_pkg installed successfully"
+                    kernel_installed=true
+                    break
+                fi
             fi
-        fi
+        done
         
         # Approach 3: Try with different repository mirrors
         if ! $kernel_installed; then

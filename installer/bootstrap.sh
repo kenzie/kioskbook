@@ -167,8 +167,17 @@ EOF
 install_packages() {
     log "Installing required packages..."
     
-    # List of required packages (including kernel to avoid later issues)
-    packages="bash git curl parted linux-lts mkinitfs"
+    # List of required packages 
+    packages="bash git curl parted"
+    
+    # Try to install kernel if available (don't fail if not found)
+    log "Attempting to pre-install kernel..."
+    for kernel_pkg in linux-lts linux linux-edge linux-virt; do
+        if apk add "$kernel_pkg" mkinitfs 2>/dev/null; then
+            log_success "Pre-installed $kernel_pkg"
+            break
+        fi
+    done
     
     # Check if packages are already installed (idempotent)
     all_installed=true

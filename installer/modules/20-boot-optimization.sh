@@ -620,6 +620,14 @@ EOF
         
         # Clear and rebuild package cache
         chroot "$MOUNT_ROOT" rm -rf /var/cache/apk/*
+        
+        # Test apk availability in chroot
+        if ! chroot "$MOUNT_ROOT" which apk >/dev/null 2>&1; then
+            log_error "apk not available in chroot environment"
+            exit 1
+        fi
+        
+        log_info "Updating package cache in chroot..."
         chroot "$MOUNT_ROOT" apk update || {
             log_warning "Failed to update package cache"
         }
@@ -630,9 +638,20 @@ EOF
         # Approach 1: Try linux-virt first (minimal firmware for VMs)
         if ! $kernel_installed; then
             log_info "Attempting to install linux-virt (VM-optimized, minimal firmware)..."
-            if chroot "$MOUNT_ROOT" apk add linux-virt 2>/dev/null; then
+            log_info "Command: chroot $MOUNT_ROOT apk add linux-virt"
+            
+            # Capture full output for debugging
+            local output
+            output=$(chroot "$MOUNT_ROOT" apk add linux-virt 2>&1)
+            local exit_code=$?
+            
+            echo "APK output: $output"
+            
+            if [[ $exit_code -eq 0 ]]; then
                 log_success "linux-virt installed successfully (minimal firmware)"
                 kernel_installed=true
+            else
+                log_warning "linux-virt installation failed (exit code: $exit_code)"
             fi
         fi
         

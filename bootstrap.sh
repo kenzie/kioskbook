@@ -124,34 +124,41 @@ prepare_disk() {
 install_system() {
     log "Installing Alpine Linux to $TARGET_DISK..."
     
-    # Configure answers for setup-alpine
-    cat > /tmp/answerfile << EOF
-KEYMAPOPTS="us us"
-HOSTNAMEOPTS="$HOSTNAME"
-INTERFACESOPTS="auto lo
+    # Run setup steps individually for better control
+    log "Configuring system settings..."
+    
+    # Keyboard layout
+    setup-keymap us us
+    
+    # Hostname
+    setup-hostname -n $HOSTNAME
+    
+    # Networking (already done in prerequisites, but ensure it's set)
+    cat > /etc/network/interfaces << 'EOF'
+auto lo
 iface lo inet loopback
 
 auto eth0
-iface eth0 inet dhcp"
-DNSOPTS=""
-TIMEZONEOPTS="UTC"
-PROXYOPTS="none"
-APKREPOSOPTS="-1"
-SSHDOPTS="-c openssh"
-NTPOPTS="-c busybox"
-DISKOPTS="-m sys -L $TARGET_DISK"
-LBUOPTS=""
-APKCACHEOPTS=""
+iface eth0 inet dhcp
 EOF
     
-    # Run setup-alpine with answerfile
-    log "Running Alpine installer..."
-    if ! setup-alpine -f /tmp/answerfile; then
-        error_exit "Alpine installation failed"
-    fi
+    # Timezone
+    setup-timezone -z UTC
     
-    # The above will handle partitioning, formatting, and base install
-    # It will also set root password interactively
+    # SSH
+    rc-update add sshd default
+    rc-service sshd start
+    
+    # Set root password
+    log "Setting root password..."
+    echo "Please set the root password:"
+    passwd
+    
+    # Now install to disk using setup-disk directly
+    log "Installing Alpine to disk..."
+    if ! setup-disk -m sys -L $TARGET_DISK; then
+        error_exit "Disk installation failed"
+    fi
     
     log_success "Alpine system installed"
 }

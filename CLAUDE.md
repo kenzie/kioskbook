@@ -196,3 +196,7 @@ The installation assumes:
 - Target hardware is Lenovo M75q-1 or compatible AMD-based system
 - Root access available
 - Complete disk installation (not in-place upgrade)
+
+## Development Memories
+
+- Please research what packages are available for Alpine before adding them to the installation process

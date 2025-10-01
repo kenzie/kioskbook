@@ -148,6 +148,28 @@ EOF
     # SSH (enable for later, don't start now to avoid issues)
     rc-update add sshd default 2>/dev/null || log_warning "SSH setup skipped"
     
+    # Configure APK repositories first
+    log "Configuring Alpine repositories..."
+    
+    # Detect Alpine version
+    local alpine_version
+    if [ -f /etc/alpine-release ]; then
+        alpine_version="v$(cat /etc/alpine-release | cut -d. -f1,2)"
+        log "Detected Alpine version: $alpine_version"
+    else
+        alpine_version="v3.22"
+        log_warning "Could not detect Alpine version, using $alpine_version"
+    fi
+    
+    # Configure repositories for the live system
+    cat > /etc/apk/repositories << EOF
+http://dl-cdn.alpinelinux.org/alpine/${alpine_version}/main
+http://dl-cdn.alpinelinux.org/alpine/${alpine_version}/community
+EOF
+    
+    # Update package index
+    apk update || log_warning "Failed to update package index"
+    
     # Set root password
     log "Setting root password..."
     echo "Please set the root password:"

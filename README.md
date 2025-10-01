@@ -45,72 +45,84 @@ Any AMD-based system with:
 
 ## Installation Guide
 
-### 1. Prepare Alpine Linux
+### 1. Boot Alpine Linux Live USB
 
-Install Alpine Linux minimal on your target hardware:
+Download Alpine Linux Standard ISO and boot from USB. **Do not run setup-alpine**.
+
+### 2. Configure Network (Important!)
+
+Before running the installer, ensure network connectivity:
 
 ```bash
-# Download Alpine Linux Standard ISO
-# Boot from USB and run setup-alpine
-setup-alpine
+# Check network interface
+ip link show
 
-# Configure basic system:
-# - Keyboard layout
-# - Network (DHCP recommended)
-# - Root password
-# - Timezone
-# - Disk setup (sys install to NVMe/SSD)
-# - Reboot
+# Bring interface up (usually eth0)
+ip link set eth0 up
+
+# Get IP via DHCP
+udhcpc -i eth0
+
+# Test connectivity
+ping -c 3 8.8.8.8
 ```
 
-### 2. Bootstrap KioskBook
+**Alternative network setup:**
+```bash
+# If DHCP doesn't work, try manual configuration
+setup-interfaces
+# Follow prompts to configure network
+# Then restart networking
+rc-service networking restart
+```
 
-After Alpine Linux installation, login as root and run:
+### 3. Run Bootstrap Installer
+
+With network working, download and run the bootstrap installer:
 
 ```bash
-# Download and run bootstrap script
-wget -O bootstrap.sh https://raw.githubusercontent.com/kenzie/kioskbook/alpine-rewrite/installer/bootstrap.sh
+# Download bootstrap script
+wget -O bootstrap.sh https://raw.githubusercontent.com/kenzie/kioskbook/main/bootstrap.sh
 chmod +x bootstrap.sh
-./bootstrap.sh
+
+# Run installer (as root)
+ash bootstrap.sh
 ```
 
-The bootstrap script will:
-- Install bash, git, and essential tools
-- Clone the KioskBook repository
-- Set up network connectivity
-- Prepare for main installation
+**What bootstrap.sh does:**
+- Configures Alpine repositories  
+- Installs required tools (parted, e2fsprogs)
+- Partitions and installs Alpine Linux to disk
+- Configures base system and networking
+- Downloads setup.sh for next phase
 
-### 3. Automatic Installation
+### 4. Reboot and Complete Setup
 
-The bootstrap script automatically runs the main installer:
+After bootstrap completes:
 
 ```bash
-# The bootstrap script handles everything automatically
-# It will prompt for configuration during installation
+# Remove USB and reboot
+reboot
 ```
 
-**Options during installation:**
-- GitHub repository for your Vue.js application
-- Tailscale authentication key for remote management
-- Installation confirmation
+**Then login as root and complete the kiosk setup:**
 
-### 4. Configuration During Install
+```bash
+# Run the kiosk configuration
+./setup.sh [github_repo] [tailscale_key]
+```
 
-The installer will prompt for:
+**Setup.sh will prompt for:**
 
 1. **GitHub Repository** (optional)
-   - Default: `kenzie/lobby-display`
+   - Default: `kenzie/lobby-display`  
    - Format: `username/repository-name`
-   - Must be a Vue.js application
+   - Must be a Node.js/Vue.js application
 
 2. **Tailscale Auth Key** (optional but recommended)
    - Get from: https://login.tailscale.com/admin/settings/keys
    - Enables remote SSH access and management
    - Leave blank to skip VPN setup
-
-3. **Installation Confirmation**
-   - Reviews target disk and configuration
-   - Type `YES` to proceed with installation
 
 ### 5. First Boot
 

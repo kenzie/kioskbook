@@ -337,6 +337,9 @@ EOF
     
     log_success "APK repositories configured for Alpine ${alpine_version}"
     
+    # Ensure root directory exists
+    mkdir -p /mnt/target/root
+    
     # Download setup.sh directly to the installed system
     log "Downloading setup.sh to installed system..."
     if command -v wget >/dev/null; then

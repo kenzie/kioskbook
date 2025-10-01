@@ -211,20 +211,27 @@ create_kiosk_user() {
     
     # Check if kiosk user already exists
     if chroot "$MOUNT_ROOT" id kiosk >/dev/null 2>&1; then
-        log_info "Kiosk user already exists, ensuring proper configuration..."
+        log_info "Kiosk user already exists, removing and recreating for clean state..."
         
-        # Ensure correct shell and home directory
-        chroot "$MOUNT_ROOT" usermod -s /bin/ash -d /home/kiosk kiosk || {
-            log_warning "Failed to update kiosk user configuration"
-        }
-    else
-        # Create kiosk user with home directory (Alpine Linux syntax)
-        chroot "$MOUNT_ROOT" adduser -D -s /bin/ash -h /home/kiosk kiosk || {
-            log_error "Failed to create kiosk user"
-            exit 1
-        }
-        log_success "Kiosk user created successfully"
+        # Remove existing user and home directory
+        chroot "$MOUNT_ROOT" deluser --remove-home kiosk 2>/dev/null || true
+        chroot "$MOUNT_ROOT" delgroup kiosk 2>/dev/null || true
+        
+        # Clean up any remaining files
+        rm -rf "$MOUNT_ROOT/home/kiosk" 2>/dev/null || true
+        
+        log_info "Existing kiosk user removed, creating fresh user..."
     fi
+    
+    # Create kiosk user with home directory (Alpine Linux syntax)
+    chroot "$MOUNT_ROOT" adduser -D -s /bin/ash -h /home/kiosk kiosk || {
+        log_error "Failed to create kiosk user"
+        log_info "Debugging user creation issue..."
+        chroot "$MOUNT_ROOT" id kiosk 2>/dev/null || log_info "No existing kiosk user found"
+        chroot "$MOUNT_ROOT" ls -la /home/ 2>/dev/null || log_info "Cannot list /home directory"
+        exit 1
+    }
+    log_success "Kiosk user created successfully"
     
     # Set password for kiosk user (disabled by default with -D)
     chroot "$MOUNT_ROOT" passwd -d kiosk || {

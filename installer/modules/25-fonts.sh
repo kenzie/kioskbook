@@ -106,6 +106,9 @@ create_font_directories() {
 install_inter_font() {
     log_info "Downloading and installing Inter font family..."
     
+    # Unalias cp to avoid any interactive prompts
+    unalias cp 2>/dev/null || true
+    
     local font_path="$MOUNT_DATA$FONT_DIR/inter"
     local temp_dir="/tmp/inter-font"
     
@@ -133,24 +136,44 @@ install_inter_font() {
     # Clear existing fonts first to avoid conflicts
     rm -f "$font_path"/*.ttf "$font_path"/*.woff2 2>/dev/null || true
     
+    # Function to copy files without prompts (bypass any cp aliases)
+    copy_file() {
+        local src="$1"
+        local dst="$2"
+        if [[ -f "$src" ]]; then
+            /bin/cp "$src" "$dst" 2>/dev/null || true
+            return 0
+        fi
+        return 1
+    }
+    
+    # Function to copy multiple files without prompts
+    copy_files_from_dir() {
+        local dir="$1"
+        local pattern="$2"
+        if [[ -d "$dir" ]]; then
+            find "$dir" -name "$pattern" -print0 | while IFS= read -r -d '' file; do
+                /bin/cp "$file" "$font_path/" 2>/dev/null || true
+            done
+            return 0
+        fi
+        return 1
+    }
+    
     # Variable font (recommended)
-    if [[ -f "Inter-Variable.ttf" ]]; then
-        cp -f "Inter-Variable.ttf" "$font_path/"
+    if copy_file "Inter-Variable.ttf" "$font_path/"; then
         log_info "Installed Inter Variable font"
     fi
     
     # Static fonts for better compatibility
-    if [[ -d "static" ]]; then
-        find static -name "*.ttf" -exec cp -f {} "$font_path/" \;
+    if copy_files_from_dir "static" "*.ttf"; then
         log_info "Installed Inter static fonts"
-    elif [[ -d "Inter Desktop" ]]; then
-        find "Inter Desktop" -name "*.ttf" -exec cp -f {} "$font_path/" \;
+    elif copy_files_from_dir "Inter Desktop" "*.ttf"; then
         log_info "Installed Inter desktop fonts"
     fi
     
     # Web fonts (subset for specific use cases)
-    if [[ -d "web" ]]; then
-        find web -name "*.woff2" -exec cp -f {} "$font_path/" \;
+    if copy_files_from_dir "web" "*.woff2"; then
         log_info "Installed Inter web fonts"
     fi
     
@@ -175,6 +198,9 @@ install_inter_font() {
 # Download and install CaskaydiaCove Nerd Font
 install_caskaydia_font() {
     log_info "Downloading and installing CaskaydiaCove Nerd Font..."
+    
+    # Unalias cp to avoid any interactive prompts
+    unalias cp 2>/dev/null || true
     
     local font_path="$MOUNT_DATA$FONT_DIR/caskaydiaCove"
     local temp_dir="/tmp/caskaydia-font"
@@ -245,22 +271,34 @@ install_caskaydia_font() {
     # Clear existing fonts first to avoid conflicts
     rm -f "$font_path"/*.ttf 2>/dev/null || true
     
+    # Function to copy fonts without prompts (bypass any cp aliases)
+    copy_fonts() {
+        local pattern="$1"
+        local description="$2"
+        
+        if find . -name "$pattern" -print -quit | grep -q .; then
+            log_info "Found $description"
+            # Use /bin/cp directly to bypass shell aliases and ensure non-interactive
+            find . -name "$pattern" -print0 | while IFS= read -r -d '' file; do
+                /bin/cp "$file" "$font_path/" 2>/dev/null || true
+            done
+            return 0
+        fi
+        return 1
+    }
+    
     # Try multiple patterns to find CaskaydiaCove fonts
-    if find . -name "*CaskaydiaCove*NF*.ttf" -print -quit | grep -q .; then
-        log_info "Found CaskaydiaCove NF fonts"
-        find . -name "*CaskaydiaCove*NF*.ttf" -exec cp -f {} "$font_path/" \;
-    elif find . -name "*CaskaydiaCove*.ttf" -print -quit | grep -q .; then
-        log_info "Found CaskaydiaCove fonts (without NF suffix)"
-        find . -name "*CaskaydiaCove*.ttf" -exec cp -f {} "$font_path/" \;
-    elif find . -name "*Cascadia*NF*.ttf" -print -quit | grep -q .; then
-        log_info "Found Cascadia NF fonts"
-        find . -name "*Cascadia*NF*.ttf" -exec cp -f {} "$font_path/" \;
-    elif find . -name "*Cascadia*.ttf" -print -quit | grep -q .; then
-        log_info "Found Cascadia fonts"
-        find . -name "*Cascadia*.ttf" -exec cp -f {} "$font_path/" \;
+    if copy_fonts "*CaskaydiaCove*NF*.ttf" "CaskaydiaCove NF fonts"; then
+        :
+    elif copy_fonts "*CaskaydiaCove*.ttf" "CaskaydiaCove fonts (without NF suffix)"; then
+        :
+    elif copy_fonts "*Cascadia*NF*.ttf" "Cascadia NF fonts"; then
+        :
+    elif copy_fonts "*Cascadia*.ttf" "Cascadia fonts"; then
+        :
     else
         log_warning "No CaskaydiaCove/Cascadia fonts found, copying all TTF files"
-        find . -name "*.ttf" -exec cp -f {} "$font_path/" \;
+        copy_fonts "*.ttf" "all TTF fonts"
     fi
     
     # Copy license if available

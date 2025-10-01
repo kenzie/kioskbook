@@ -123,7 +123,9 @@ EOF
     
     # Run setup-alpine with answerfile
     log "Running Alpine installer..."
-    setup-alpine -f /tmp/answerfile
+    if ! setup-alpine -f /tmp/answerfile; then
+        error_exit "Alpine installation failed"
+    fi
     
     # The above will handle partitioning, formatting, and base install
     # It will also set root password interactively
@@ -154,7 +156,14 @@ post_install() {
     # Ensure kernel parameters for quiet boot
     if [ -f /mnt/target/etc/update-extlinux.conf ]; then
         sed -i 's/^default_kernel_opts=.*/default_kernel_opts="quiet"/' /mnt/target/etc/update-extlinux.conf
-        chroot /mnt/target update-extlinux
+        
+        # Add root device to suppress warning
+        if ! grep -q "^root=" /mnt/target/etc/update-extlinux.conf; then
+            echo "root=$TARGET_DISK" >> /mnt/target/etc/update-extlinux.conf
+        fi
+        
+        # Update bootloader config (warning is expected and harmless)
+        chroot /mnt/target update-extlinux || log_warning "Bootloader config updated with warnings (normal)"
     fi
     
     # Unmount

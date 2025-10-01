@@ -171,14 +171,35 @@ create_kiosk_user() {
     # Create user
     adduser -D -s /bin/bash $KIOSK_USER
     
-    # Configure auto-login
-    # For Alpine, we use agetty
-    cat > /etc/conf.d/agetty.tty1 << EOF
+    # Configure auto-login for Alpine
+    log "Configuring auto-login..."
+    
+    # Method 1: Try agetty configuration
+    if rc-service agetty.tty1 status >/dev/null 2>&1; then
+        log "Using agetty for auto-login..."
+        cat > /etc/conf.d/agetty.tty1 << EOF
 agetty_options="--autologin $KIOSK_USER --noclear"
 EOF
-    
-    # Enable agetty on tty1
-    rc-update add agetty.tty1 default
+        rc-update add agetty.tty1 default
+    else
+        # Method 2: Use getty configuration 
+        log "Using getty for auto-login..."
+        
+        # Create getty configuration
+        mkdir -p /etc/conf.d
+        cat > /etc/conf.d/getty.tty1 << EOF
+getty_options="--autologin $KIOSK_USER"
+EOF
+        
+        # Enable getty on tty1 if available
+        if rc-service getty.tty1 status >/dev/null 2>&1; then
+            rc-update add getty.tty1 default
+        else
+            # Method 3: Configure inittab directly (fallback)
+            log "Configuring inittab for auto-login..."
+            sed -i "s/^tty1:.*$/tty1::respawn:\/sbin\/getty -a $KIOSK_USER 38400 tty1/" /etc/inittab 2>/dev/null || true
+        fi
+    fi
     
     # Create .xinitrc
     cat > $KIOSK_HOME/.xinitrc << 'EOF'

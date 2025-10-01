@@ -118,7 +118,7 @@ update_system() {
     # Install essential packages
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
         curl wget ca-certificates gnupg lsb-release \
-        sudo systemd-timesyncd
+        sudo systemd-timesyncd unzip git
     
     log_success "System updated"
 }

@@ -295,6 +295,7 @@ post_install() {
     
     # Configure networking for installed system
     log "Setting up networking in installed system..."
+    mkdir -p /mnt/target/etc/network
     cat > /mnt/target/etc/network/interfaces << 'EOF'
 auto lo
 iface lo inet loopback

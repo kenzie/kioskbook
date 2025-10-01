@@ -130,24 +130,27 @@ install_inter_font() {
     # Install Inter fonts
     log_info "Installing Inter font variants..."
     
+    # Clear existing fonts first to avoid conflicts
+    rm -f "$font_path"/*.ttf "$font_path"/*.woff2 2>/dev/null || true
+    
     # Variable font (recommended)
     if [[ -f "Inter-Variable.ttf" ]]; then
-        cp "Inter-Variable.ttf" "$font_path/"
+        cp -f "Inter-Variable.ttf" "$font_path/"
         log_info "Installed Inter Variable font"
     fi
     
     # Static fonts for better compatibility
     if [[ -d "static" ]]; then
-        find static -name "*.ttf" -exec cp {} "$font_path/" \;
+        find static -name "*.ttf" -exec cp -f {} "$font_path/" \;
         log_info "Installed Inter static fonts"
     elif [[ -d "Inter Desktop" ]]; then
-        find "Inter Desktop" -name "*.ttf" -exec cp {} "$font_path/" \;
+        find "Inter Desktop" -name "*.ttf" -exec cp -f {} "$font_path/" \;
         log_info "Installed Inter desktop fonts"
     fi
     
     # Web fonts (subset for specific use cases)
     if [[ -d "web" ]]; then
-        find web -name "*.woff2" -exec cp {} "$font_path/" \;
+        find web -name "*.woff2" -exec cp -f {} "$font_path/" \;
         log_info "Installed Inter web fonts"
     fi
     
@@ -239,22 +242,25 @@ install_caskaydia_font() {
     log_info "Available TTF files in archive:"
     find . -name "*.ttf" | head -10
     
+    # Clear existing fonts first to avoid conflicts
+    rm -f "$font_path"/*.ttf 2>/dev/null || true
+    
     # Try multiple patterns to find CaskaydiaCove fonts
     if find . -name "*CaskaydiaCove*NF*.ttf" -print -quit | grep -q .; then
         log_info "Found CaskaydiaCove NF fonts"
-        find . -name "*CaskaydiaCove*NF*.ttf" -exec cp {} "$font_path/" \;
+        find . -name "*CaskaydiaCove*NF*.ttf" -exec cp -f {} "$font_path/" \;
     elif find . -name "*CaskaydiaCove*.ttf" -print -quit | grep -q .; then
         log_info "Found CaskaydiaCove fonts (without NF suffix)"
-        find . -name "*CaskaydiaCove*.ttf" -exec cp {} "$font_path/" \;
+        find . -name "*CaskaydiaCove*.ttf" -exec cp -f {} "$font_path/" \;
     elif find . -name "*Cascadia*NF*.ttf" -print -quit | grep -q .; then
         log_info "Found Cascadia NF fonts"
-        find . -name "*Cascadia*NF*.ttf" -exec cp {} "$font_path/" \;
+        find . -name "*Cascadia*NF*.ttf" -exec cp -f {} "$font_path/" \;
     elif find . -name "*Cascadia*.ttf" -print -quit | grep -q .; then
         log_info "Found Cascadia fonts"
-        find . -name "*Cascadia*.ttf" -exec cp {} "$font_path/" \;
+        find . -name "*Cascadia*.ttf" -exec cp -f {} "$font_path/" \;
     else
         log_warning "No CaskaydiaCove/Cascadia fonts found, copying all TTF files"
-        find . -name "*.ttf" -exec cp {} "$font_path/" \;
+        find . -name "*.ttf" -exec cp -f {} "$font_path/" \;
     fi
     
     # Copy license if available

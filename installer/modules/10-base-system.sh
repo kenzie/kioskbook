@@ -209,11 +209,22 @@ configure_timezone() {
 create_kiosk_user() {
     log_info "Creating kiosk user..."
     
-    # Create kiosk user with home directory (Alpine Linux syntax)
-    chroot "$MOUNT_ROOT" adduser -D -s /bin/ash -h /home/kiosk kiosk || {
-        log_error "Failed to create kiosk user"
-        exit 1
-    }
+    # Check if kiosk user already exists
+    if chroot "$MOUNT_ROOT" id kiosk >/dev/null 2>&1; then
+        log_info "Kiosk user already exists, ensuring proper configuration..."
+        
+        # Ensure correct shell and home directory
+        chroot "$MOUNT_ROOT" usermod -s /bin/ash -d /home/kiosk kiosk || {
+            log_warning "Failed to update kiosk user configuration"
+        }
+    else
+        # Create kiosk user with home directory (Alpine Linux syntax)
+        chroot "$MOUNT_ROOT" adduser -D -s /bin/ash -h /home/kiosk kiosk || {
+            log_error "Failed to create kiosk user"
+            exit 1
+        }
+        log_success "Kiosk user created successfully"
+    fi
     
     # Set password for kiosk user (disabled by default with -D)
     chroot "$MOUNT_ROOT" passwd -d kiosk || {

@@ -63,18 +63,31 @@ check_prerequisites() {
         fi
     fi
     
-    # Install required tools (excluding firmware bloat)
-    log "Installing bootstrap tools..."
+    # Check for required tools (most should be available in Alpine Live)
+    log "Checking for required tools..."
     
-    # Create firmware mask to prevent bloat
-    echo "linux-firmware" > /etc/apk/mask
-    echo "linux-firmware-*" >> /etc/apk/mask
+    # Only install tools that are missing
+    missing_tools=""
     
-    # Install minimal required tools
-    apk add alpine-conf parted e2fsprogs syslinux
+    if ! command -v setup-alpine >/dev/null; then
+        missing_tools="$missing_tools alpine-conf"
+    fi
     
-    # Remove mask after installation
-    rm -f /etc/apk/mask
+    if ! command -v parted >/dev/null; then
+        missing_tools="$missing_tools parted"
+    fi
+    
+    if ! command -v mkfs.ext4 >/dev/null; then
+        missing_tools="$missing_tools e2fsprogs"
+    fi
+    
+    if [ -n "$missing_tools" ]; then
+        log "Installing missing tools:$missing_tools"
+        # Try to install just the missing tools, ignore firmware bloat errors
+        apk add $missing_tools 2>/dev/null || log_warning "Some tools may be missing (continuing anyway)"
+    else
+        log_success "All required tools already available"
+    fi
     
     log_success "Prerequisites checked"
 }

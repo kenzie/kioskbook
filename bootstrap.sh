@@ -196,8 +196,8 @@ xset s off
 xset -dpms
 xset s noblank
 
-# Wait for application to be ready
-while ! curl -s http://localhost:3000 >/dev/null 2>&1; do
+# Wait for application to be ready (Vite dev server runs on 5173)
+while ! curl -s http://localhost:5173 >/dev/null 2>&1; do
     sleep 1
 done
 
@@ -216,7 +216,7 @@ exec chromium \
     --disable-prompt-on-repost \
     --no-message-box \
     --start-fullscreen \
-    http://localhost:3000
+    http://localhost:5173
 EOF
     
     chmod +x "$KIOSK_HOME/.config/openbox/autostart"
@@ -286,7 +286,7 @@ User=root
 WorkingDirectory=$APP_DIR
 Environment=NODE_ENV=production
 Environment=HOST=0.0.0.0
-Environment=PORT=3000
+Environment=PORT=5173
 ExecStart=/usr/bin/npm run dev
 Restart=always
 RestartSec=10

@@ -67,7 +67,6 @@ install_font_packages() {
         "pango-dev"
         "unzip"
         "wget"
-        "fc-cache"
     )
     
     apk --root "$MOUNT_ROOT" add "${packages[@]}" || {
@@ -182,24 +181,81 @@ install_caskaydia_font() {
     
     # Download CaskaydiaCove Nerd Font
     log_info "Downloading CaskaydiaCove Nerd Font v${NERD_FONT_VERSION}..."
-    wget -O "$temp_dir/caskaydia.zip" "$NERD_FONT_URL" || {
-        log_error "Failed to download CaskaydiaCove Nerd Font"
+    log_info "URL: $NERD_FONT_URL"
+    
+    if ! wget -O "$temp_dir/caskaydia.zip" "$NERD_FONT_URL"; then
+        log_error "Failed to download CaskaydiaCove Nerd Font from $NERD_FONT_URL"
+        log_info "Checking if file was partially downloaded..."
+        if [[ -f "$temp_dir/caskaydia.zip" ]]; then
+            log_info "Partial download found, file size: $(stat -c%s "$temp_dir/caskaydia.zip" 2>/dev/null || echo "unknown")"
+            rm -f "$temp_dir/caskaydia.zip"
+        fi
         exit 1
-    }
+    fi
+    
+    # Verify download
+    if [[ ! -f "$temp_dir/caskaydia.zip" ]]; then
+        log_error "Downloaded file not found"
+        exit 1
+    fi
+    
+    local file_size
+    file_size=$(stat -c%s "$temp_dir/caskaydia.zip" 2>/dev/null || echo "0")
+    if [[ "$file_size" -lt 1000000 ]]; then
+        log_warning "Downloaded file seems too small: ${file_size} bytes"
+    fi
+    log_info "Downloaded CaskaydiaCove Nerd Font (${file_size} bytes)"
     
     # Extract fonts
     log_info "Extracting CaskaydiaCove font files..."
     cd "$temp_dir"
-    unzip -q caskaydia.zip || {
-        log_error "Failed to extract CaskaydiaCove Nerd Font"
+    
+    # Test zip file integrity first
+    if ! unzip -t caskaydia.zip >/dev/null 2>&1; then
+        log_error "Downloaded zip file is corrupted"
+        log_info "Attempting to view file contents with 'file' command:"
+        file caskaydia.zip || true
+        log_info "First few bytes of file:"
+        head -c 100 caskaydia.zip | xxd || true
         exit 1
-    }
+    fi
+    
+    # Extract with verbose output for debugging
+    log_info "Zip file is valid, extracting..."
+    if ! unzip -q caskaydia.zip; then
+        log_error "Failed to extract CaskaydiaCove Nerd Font"
+        log_info "Attempting extraction with verbose output:"
+        unzip caskaydia.zip || true
+        exit 1
+    fi
+    
+    log_info "Extraction completed, listing contents:"
+    ls -la
     
     # Install CaskaydiaCove fonts
     log_info "Installing CaskaydiaCove font variants..."
     
-    # Copy all TTF files
-    find . -name "*CaskaydiaCove*NF*.ttf" -exec cp {} "$font_path/" \;
+    # List available TTF files for debugging
+    log_info "Available TTF files in archive:"
+    find . -name "*.ttf" | head -10
+    
+    # Try multiple patterns to find CaskaydiaCove fonts
+    if find . -name "*CaskaydiaCove*NF*.ttf" -print -quit | grep -q .; then
+        log_info "Found CaskaydiaCove NF fonts"
+        find . -name "*CaskaydiaCove*NF*.ttf" -exec cp {} "$font_path/" \;
+    elif find . -name "*CaskaydiaCove*.ttf" -print -quit | grep -q .; then
+        log_info "Found CaskaydiaCove fonts (without NF suffix)"
+        find . -name "*CaskaydiaCove*.ttf" -exec cp {} "$font_path/" \;
+    elif find . -name "*Cascadia*NF*.ttf" -print -quit | grep -q .; then
+        log_info "Found Cascadia NF fonts"
+        find . -name "*Cascadia*NF*.ttf" -exec cp {} "$font_path/" \;
+    elif find . -name "*Cascadia*.ttf" -print -quit | grep -q .; then
+        log_info "Found Cascadia fonts"
+        find . -name "*Cascadia*.ttf" -exec cp {} "$font_path/" \;
+    else
+        log_warning "No CaskaydiaCove/Cascadia fonts found, copying all TTF files"
+        find . -name "*.ttf" -exec cp {} "$font_path/" \;
+    fi
     
     # Copy license if available
     find . -name "LICENSE*" -o -name "readme*" -o -name "README*" | head -3 | xargs -I {} cp {} "$font_path/" 2>/dev/null || true

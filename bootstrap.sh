@@ -183,6 +183,35 @@ EOF
         mkdir -p /mnt/disk/etc/apk
         cp /etc/apk/repositories /mnt/disk/etc/apk/
         
+        # Install essential packages to the target system
+        log "Installing essential packages to target system..."
+        
+        # Initialize APK database in target
+        mkdir -p /mnt/disk/var/cache/apk
+        apk add --root /mnt/disk --initdb \
+            alpine-base \
+            bash \
+            busybox \
+            busybox-initscripts \
+            openrc \
+            alpine-conf \
+            git \
+            curl \
+            wget \
+            htop \
+            nano \
+            util-linux \
+            coreutils \
+            shadow \
+            sudo \
+            pciutils \
+            usbutils \
+            e2fsprogs \
+            openssh \
+            linux-lts \
+            linux-firmware-none \
+            2>/dev/null || log_warning "Some packages failed to install"
+        
         # Basic bootloader setup
         mkdir -p /mnt/disk/boot
         extlinux --install /mnt/disk/boot || error_exit "Failed to install bootloader"

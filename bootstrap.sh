@@ -491,12 +491,28 @@ EOF
 
 # Show completion
 show_completion() {
+    # Unmount USB ISO to ensure clean reboot to installed system
+    log "Cleaning up installation media..."
+    
+    # Find and unmount CD/ISO mounts
+    for mount_point in /media/cdrom /mnt/cdrom /media/usb /mnt/usb; do
+        if mount | grep -q "$mount_point"; then
+            umount "$mount_point" 2>/dev/null && log "Unmounted $mount_point"
+        fi
+    done
+    
+    # Unmount any sr0 (CD/USB) devices
+    umount /dev/sr0 2>/dev/null && log "Unmounted USB/CD device"
+    
+    # Eject CD/USB if possible
+    eject /dev/sr0 2>/dev/null && log "Ejected USB/CD device"
+    
     echo -e "\n${GREEN}═══════════════════════════════════════════════════════${NC}"
     echo -e "${GREEN}     Bootstrap Complete - Base System Installed!${NC}"
     echo -e "${GREEN}═══════════════════════════════════════════════════════${NC}"
     
     echo -e "\n${CYAN}Next Steps:${NC}"
-    echo -e "1. Remove USB and reboot: ${YELLOW}reboot${NC}"
+    echo -e "1. ${YELLOW}reboot${NC} (USB automatically unmounted)"
     echo -e "2. Login as root with the password you set"
     echo -e "3. Run: ${YELLOW}./setup.sh${NC} to complete kiosk installation"
     
@@ -506,6 +522,7 @@ show_completion() {
     echo -e "  ✓ Bootloader configured"
     echo -e "  ✓ Basic networking"
     echo -e "  ✓ Root access configured"
+    echo -e "  ✓ USB installation media unmounted"
 }
 
 # Main execution

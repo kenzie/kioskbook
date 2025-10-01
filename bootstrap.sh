@@ -278,9 +278,20 @@ EOF
 post_install() {
     log "Configuring installed system..."
     
-    # Mount the installed system
+    # Mount the installed system (try different partition layouts)
     mkdir -p /mnt/target
-    mount ${TARGET_DISK}1 /mnt/target 2>/dev/null || mount ${TARGET_DISK}2 /mnt/target
+    
+    # Try common Alpine partition layouts
+    if mount ${TARGET_DISK}3 /mnt/target 2>/dev/null; then
+        log "Mounted root filesystem from ${TARGET_DISK}3"
+    elif mount ${TARGET_DISK}2 /mnt/target 2>/dev/null; then
+        log "Mounted root filesystem from ${TARGET_DISK}2"
+    elif mount ${TARGET_DISK}1 /mnt/target 2>/dev/null; then
+        log "Mounted root filesystem from ${TARGET_DISK}1"
+    else
+        log_error "Failed to mount installed system"
+        exit 1
+    fi
     
     # Configure networking for installed system
     log "Setting up networking in installed system..."

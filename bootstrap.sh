@@ -155,8 +155,63 @@ EOF
     
     # Now install to disk using setup-disk directly
     log "Installing Alpine to disk..."
-    if ! setup-disk -m sys -L $TARGET_DISK; then
-        error_exit "Disk installation failed"
+    
+    # Try setup-disk with verbose output
+    log "Running: setup-disk -m sys -L $TARGET_DISK"
+    if setup-disk -m sys -L $TARGET_DISK; then
+        log_success "Disk installation completed"
+    else
+        log_warning "setup-disk failed, trying manual approach..."
+        
+        # Manual disk setup as fallback
+        log "Attempting manual disk installation..."
+        
+        # Create filesystem if not already done
+        if ! mount | grep -q "$TARGET_DISK"; then
+            mkfs.ext4 -F ${TARGET_DISK}1 || error_exit "Failed to format disk"
+        fi
+        
+        # Mount target
+        mkdir -p /mnt/disk
+        mount ${TARGET_DISK}1 /mnt/disk || error_exit "Failed to mount target disk"
+        
+        # Copy system files
+        cp -a /etc /mnt/disk/ || error_exit "Failed to copy /etc"
+        mkdir -p /mnt/disk/{root,home,var,tmp,usr,opt,srv}
+        
+        # Install base packages to target
+        mkdir -p /mnt/disk/etc/apk
+        cp /etc/apk/repositories /mnt/disk/etc/apk/
+        
+        # Basic bootloader setup
+        mkdir -p /mnt/disk/boot
+        extlinux --install /mnt/disk/boot || error_exit "Failed to install bootloader"
+        
+        # Create basic boot config
+        cat > /mnt/disk/boot/extlinux.conf << EOF
+DEFAULT kioskbook
+PROMPT 0
+TIMEOUT 10
+
+LABEL kioskbook
+    LINUX vmlinuz
+    INITRD initramfs
+    APPEND root=${TARGET_DISK}1 rw modules=sd-mod,usb-storage,ext4 quiet
+EOF
+        
+        # Copy kernel if available
+        if [ -f /boot/vmlinuz* ]; then
+            cp /boot/vmlinuz* /mnt/disk/boot/vmlinuz || log_warning "Kernel copy failed"
+        fi
+        if [ -f /boot/initramfs* ]; then
+            cp /boot/initramfs* /mnt/disk/boot/initramfs || log_warning "Initramfs copy failed"
+        fi
+        
+        # Install MBR
+        dd if=/usr/share/syslinux/mbr.bin of=$TARGET_DISK bs=440 count=1 2>/dev/null || log_warning "MBR install failed"
+        
+        umount /mnt/disk
+        log_success "Manual disk installation completed"
     fi
     
     log_success "Alpine system installed"

@@ -63,8 +63,18 @@ check_prerequisites() {
         fi
     fi
     
-    # Install required tools
+    # Install required tools (excluding firmware bloat)
+    log "Installing bootstrap tools..."
+    
+    # Create firmware mask to prevent bloat
+    echo "linux-firmware" > /etc/apk/mask
+    echo "linux-firmware-*" >> /etc/apk/mask
+    
+    # Install minimal required tools
     apk add alpine-conf parted e2fsprogs syslinux
+    
+    # Remove mask after installation
+    rm -f /etc/apk/mask
     
     log_success "Prerequisites checked"
 }

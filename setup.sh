@@ -374,31 +374,7 @@ EOF
 configure_silent_boot() {
     log "Configuring silent boot..."
     
-    # Check if fbsplash is available (Alpine's boot splash)
-    if apk info -e fbsplash >/dev/null 2>&1; then
-        log "Installing fbsplash for boot logo..."
-        apk add fbsplash
-        
-        # Create simple Route 19 splash config
-        mkdir -p /etc/splash
-        cat > /etc/splash/route19 << 'EOF'
-# Route 19 splash configuration
-bgcolor=0,0,0
-tx=50
-ty=90
-tw=820
-th=100
-EOF
-        
-        # Enable fbsplash in boot
-        rc-update add fbsplash boot
-        
-        log_success "Alpine fbsplash configured"
-    else
-        log "fbsplash not available, using silent boot only"
-    fi
-    
-    # Ensure silent boot parameters are set (most important part)
+    # Configure silent boot parameters in bootloader
     if [ -f /boot/extlinux.conf ]; then
         # Add silent boot parameters
         sed -i '/APPEND.*/ { /quiet/!s/APPEND.*/& quiet loglevel=3 console=tty1 vga=current/ }' /boot/extlinux.conf

@@ -238,6 +238,10 @@ EOF
             openssh \
             linux-lts \
             linux-firmware-none \
+            dhcpcd \
+            ifupdown \
+            bridge-utils \
+            iproute2 \
             2>/dev/null || log_warning "Some packages failed to install"
         
         # Basic bootloader setup
@@ -282,15 +286,47 @@ post_install() {
     mkdir -p /mnt/target
     
     # Try common Alpine partition layouts
-    if mount ${TARGET_DISK}3 /mnt/target 2>/dev/null; then
-        log "Mounted root filesystem from ${TARGET_DISK}3"
-    elif mount ${TARGET_DISK}2 /mnt/target 2>/dev/null; then
-        log "Mounted root filesystem from ${TARGET_DISK}2"
-    elif mount ${TARGET_DISK}1 /mnt/target 2>/dev/null; then
-        log "Mounted root filesystem from ${TARGET_DISK}1"
-    else
-        log_error "Failed to mount installed system"
-        exit 1
+    local mounted=false
+    
+    # Wait for disk to settle
+    sleep 2
+    sync
+    
+    # Try different approaches to mount
+    for attempt in 1 2 3; do
+        log "Mount attempt $attempt..."
+        
+        # Try different partitions
+        if mount ${TARGET_DISK}3 /mnt/target 2>/dev/null; then
+            log "Mounted root filesystem from ${TARGET_DISK}3"
+            mounted=true
+            break
+        elif mount ${TARGET_DISK}2 /mnt/target 2>/dev/null; then
+            log "Mounted root filesystem from ${TARGET_DISK}2"
+            mounted=true
+            break
+        elif mount ${TARGET_DISK}1 /mnt/target 2>/dev/null; then
+            log "Mounted root filesystem from ${TARGET_DISK}1"
+            mounted=true
+            break
+        else
+            log_warning "Mount attempt $attempt failed, waiting..."
+            sleep 3
+            # Try to clear any locks
+            sync
+            umount -l ${TARGET_DISK}* 2>/dev/null || true
+        fi
+    done
+    
+    if [ "$mounted" = "false" ]; then
+        log_warning "Could not mount installed system - network setup will be skipped"
+        log "You will need to configure networking manually after reboot"
+        log "Run these commands after reboot to get setup.sh:"
+        log "  ip link set eth0 up"
+        log "  udhcpc -i eth0"  
+        log "  wget -O /root/setup.sh https://raw.githubusercontent.com/kenzie/kioskbook/main/setup.sh"
+        log "  chmod +x /root/setup.sh"
+        return 0
     fi
     
     # Configure networking for installed system
@@ -306,7 +342,42 @@ EOF
     
     # Ensure networking service is enabled
     mkdir -p /mnt/target/etc/runlevels/boot
+    mkdir -p /mnt/target/etc/runlevels/default
+    
+    # Enable networking in boot runlevel
     ln -sf /etc/init.d/networking /mnt/target/etc/runlevels/boot/networking 2>/dev/null || true
+    
+    # Also enable in default runlevel for reliability
+    ln -sf /etc/init.d/networking /mnt/target/etc/runlevels/default/networking 2>/dev/null || true
+    
+    # Ensure the networking service script exists in the target system
+    if [ ! -f /mnt/target/etc/init.d/networking ]; then
+        log_warning "networking service script missing, creating basic version..."
+        mkdir -p /mnt/target/etc/init.d
+        cat > /mnt/target/etc/init.d/networking << 'EOF'
+#!/sbin/openrc-run
+
+description="Network interface setup"
+
+depend() {
+    need localmount
+    after bootmisc modules
+}
+
+start() {
+    ebegin "Starting networking"
+    /sbin/ifup -a
+    eend $?
+}
+
+stop() {
+    ebegin "Stopping networking"
+    /sbin/ifdown -a
+    eend $?
+}
+EOF
+        chmod +x /mnt/target/etc/init.d/networking
+    fi
     
     # Copy DNS settings from live system
     if [ -f /etc/resolv.conf ]; then
@@ -343,14 +414,35 @@ EOF
     # Download setup.sh directly to the installed system
     log "Downloading setup.sh to installed system..."
     if command -v wget >/dev/null; then
-        wget -q -O /mnt/target/root/setup.sh https://raw.githubusercontent.com/kenzie/kioskbook/main/setup.sh || log_warning "Failed to download setup.sh"
-        chmod +x /mnt/target/root/setup.sh 2>/dev/null || true
+        if wget -O /mnt/target/root/setup.sh https://raw.githubusercontent.com/kenzie/kioskbook/main/setup.sh; then
+            chmod +x /mnt/target/root/setup.sh
+            log_success "setup.sh downloaded successfully"
+        else
+            log_warning "Failed to download setup.sh via wget"
+            # Try curl as fallback
+            if command -v curl >/dev/null; then
+                log "Trying curl as fallback..."
+                if curl -o /mnt/target/root/setup.sh https://raw.githubusercontent.com/kenzie/kioskbook/main/setup.sh; then
+                    chmod +x /mnt/target/root/setup.sh
+                    log_success "setup.sh downloaded with curl"
+                else
+                    log_warning "Failed to download setup.sh via curl"
+                fi
+            fi
+        fi
     elif [ -f "setup.sh" ]; then
         cp setup.sh /mnt/target/root/
         chmod +x /mnt/target/root/setup.sh
         log_success "Copied local setup.sh to /root/"
     else
         log_warning "setup.sh not available - will need to download manually after boot"
+    fi
+    
+    # Verify setup.sh was downloaded
+    if [ -f "/mnt/target/root/setup.sh" ]; then
+        log_success "Verified: setup.sh is present in /root/"
+    else
+        log_error "setup.sh is missing from /root/ - installation incomplete"
     fi
     
     # Create setup marker

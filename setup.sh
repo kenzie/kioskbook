@@ -222,25 +222,32 @@ create_kiosk_user() {
     # Backup original inittab
     cp /etc/inittab /etc/inittab.backup 2>/dev/null || true
     
-    # Use inittab method (most reliable for Alpine)
-    if sed -i "s/^tty1:.*/tty1::respawn:\/sbin\/getty -a $KIOSK_USER 38400 tty1/" /etc/inittab; then
-        log_success "Auto-login configured in /etc/inittab"
-        
-        # Verify the change was made
-        if grep -q "getty -a $KIOSK_USER" /etc/inittab; then
-            log "Verified: Auto-login entry found in inittab"
+    # Use Alpine's correct auto-login method
+    if command -v agetty >/dev/null; then
+        # Alpine uses agetty for auto-login
+        if sed -i "s/^tty1:.*/tty1::respawn:\/sbin\/agetty --autologin $KIOSK_USER --noclear tty1 linux/" /etc/inittab; then
+            log_success "Auto-login configured with agetty"
         else
-            log_warning "Auto-login entry not found in inittab, trying alternative approach"
-            
-            # Alternative: Replace or add the line
-            if grep -q "^tty1:" /etc/inittab; then
-                sed -i "s/^tty1:.*/tty1::respawn:\/sbin\/getty -a $KIOSK_USER 38400 tty1/" /etc/inittab
-            else
-                echo "tty1::respawn:/sbin/getty -a $KIOSK_USER 38400 tty1" >> /etc/inittab
-            fi
+            log_error "Failed to configure agetty auto-login"
+            exit 1
         fi
     else
-        log_error "Failed to configure auto-login in inittab"
+        # Fallback to simple su method (most reliable)
+        log "agetty not found, using su method..."
+        if sed -i "s/^tty1:.*/tty1::respawn:\/bin\/su - $KIOSK_USER/" /etc/inittab; then
+            log_success "Auto-login configured with su method"
+        else
+            log_error "Failed to configure su auto-login"
+            exit 1
+        fi
+    fi
+    
+    # Verify the auto-login configuration
+    if grep -q "$KIOSK_USER" /etc/inittab; then
+        log "Verified: Auto-login entry found in inittab"
+        log "Auto-login line: $(grep tty1 /etc/inittab)"
+    else
+        log_error "Auto-login verification failed"
         exit 1
     fi
     
@@ -363,24 +370,45 @@ EOF
     log_success "Application installed and started"
 }
 
-# Install Plymouth (optional)
-install_plymouth() {
-    log "Installing Plymouth boot splash..."
+# Configure silent boot (Alpine native)
+configure_silent_boot() {
+    log "Configuring silent boot..."
     
-    # Check if plymouth is available
-    if apk info -e plymouth >/dev/null 2>&1; then
-        apk add plymouth plymouth-themes
+    # Check if fbsplash is available (Alpine's boot splash)
+    if apk info -e fbsplash >/dev/null 2>&1; then
+        log "Installing fbsplash for boot logo..."
+        apk add fbsplash
         
-        # Configure if theme files exist
-        if [ -d "$SCRIPT_DIR/config/boot" ]; then
-            cp -r $SCRIPT_DIR/config/boot/route19.plymouth /usr/share/plymouth/themes/
-            plymouth-set-default-theme route19
-        fi
+        # Create simple Route 19 splash config
+        mkdir -p /etc/splash
+        cat > /etc/splash/route19 << 'EOF'
+# Route 19 splash configuration
+bgcolor=0,0,0
+tx=50
+ty=90
+tw=820
+th=100
+EOF
         
-        log_success "Plymouth installed"
+        # Enable fbsplash in boot
+        rc-update add fbsplash boot
+        
+        log_success "Alpine fbsplash configured"
     else
-        log_warning "Plymouth not available in repositories, skipping"
+        log "fbsplash not available, using silent boot only"
     fi
+    
+    # Ensure silent boot parameters are set (most important part)
+    if [ -f /boot/extlinux.conf ]; then
+        # Add silent boot parameters
+        sed -i '/APPEND.*/ { /quiet/!s/APPEND.*/& quiet loglevel=3 console=tty1 vga=current/ }' /boot/extlinux.conf
+        log "Silent boot parameters configured"
+    fi
+    
+    # Hide boot messages from console
+    echo 'kernel.printk = 3 4 1 3' >> /etc/sysctl.conf
+    
+    log_success "Silent boot configured - clean startup without boot text"
 }
 
 # Optimize boot
@@ -492,7 +520,7 @@ main() {
     create_kiosk_user
     install_nodejs
     install_application
-    install_plymouth
+    configure_silent_boot
     optimize_boot
     install_tailscale
     finalize

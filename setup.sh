@@ -202,37 +202,46 @@ create_kiosk_user() {
         sleep 1
     fi
     
-    # Create user
-    adduser -D -s /bin/bash $KIOSK_USER
+    # Create user with error checking
+    if adduser -D -s /bin/bash $KIOSK_USER; then
+        log_success "Kiosk user '$KIOSK_USER' created successfully"
+    else
+        log_error "Failed to create kiosk user '$KIOSK_USER'"
+        exit 1
+    fi
+    
+    # Verify user was created
+    if ! id "$KIOSK_USER" >/dev/null 2>&1; then
+        log_error "Kiosk user '$KIOSK_USER' was not created properly"
+        exit 1
+    fi
     
     # Configure auto-login for Alpine
-    log "Configuring auto-login..."
+    log "Configuring auto-login using inittab method..."
     
-    # Method 1: Try agetty configuration
-    if rc-service agetty.tty1 status >/dev/null 2>&1; then
-        log "Using agetty for auto-login..."
-        cat > /etc/conf.d/agetty.tty1 << EOF
-agetty_options="--autologin $KIOSK_USER --noclear"
-EOF
-        rc-update add agetty.tty1 default
-    else
-        # Method 2: Use getty configuration 
-        log "Using getty for auto-login..."
+    # Backup original inittab
+    cp /etc/inittab /etc/inittab.backup 2>/dev/null || true
+    
+    # Use inittab method (most reliable for Alpine)
+    if sed -i "s/^tty1:.*/tty1::respawn:\/sbin\/getty -a $KIOSK_USER 38400 tty1/" /etc/inittab; then
+        log_success "Auto-login configured in /etc/inittab"
         
-        # Create getty configuration
-        mkdir -p /etc/conf.d
-        cat > /etc/conf.d/getty.tty1 << EOF
-getty_options="--autologin $KIOSK_USER"
-EOF
-        
-        # Enable getty on tty1 if available
-        if rc-service getty.tty1 status >/dev/null 2>&1; then
-            rc-update add getty.tty1 default
+        # Verify the change was made
+        if grep -q "getty -a $KIOSK_USER" /etc/inittab; then
+            log "Verified: Auto-login entry found in inittab"
         else
-            # Method 3: Configure inittab directly (fallback)
-            log "Configuring inittab for auto-login..."
-            sed -i "s/^tty1:.*$/tty1::respawn:\/sbin\/getty -a $KIOSK_USER 38400 tty1/" /etc/inittab 2>/dev/null || true
+            log_warning "Auto-login entry not found in inittab, trying alternative approach"
+            
+            # Alternative: Replace or add the line
+            if grep -q "^tty1:" /etc/inittab; then
+                sed -i "s/^tty1:.*/tty1::respawn:\/sbin\/getty -a $KIOSK_USER 38400 tty1/" /etc/inittab
+            else
+                echo "tty1::respawn:/sbin/getty -a $KIOSK_USER 38400 tty1" >> /etc/inittab
+            fi
         fi
+    else
+        log_error "Failed to configure auto-login in inittab"
+        exit 1
     fi
     
     # Create .xinitrc
@@ -275,9 +284,23 @@ if [ -z "$DISPLAY" ] && [ "$(tty)" = "/dev/tty1" ]; then
 fi
 EOF
     
+    # Set ownership and verify
     chown -R $KIOSK_USER:$KIOSK_USER $KIOSK_HOME
     
-    log_success "Kiosk user configured"
+    # Verify files were created correctly
+    if [ -f "$KIOSK_HOME/.xinitrc" ] && [ -f "$KIOSK_HOME/.profile" ]; then
+        log_success "Kiosk user configured with X11 auto-start"
+    else
+        log_error "Failed to create kiosk user configuration files"
+        exit 1
+    fi
+    
+    # Final verification of auto-login setup
+    if grep -q "getty -a $KIOSK_USER" /etc/inittab; then
+        log_success "Auto-login verified in /etc/inittab"
+    else
+        log_warning "Auto-login verification failed - manual setup may be required"
+    fi
 }
 
 # Install Node.js

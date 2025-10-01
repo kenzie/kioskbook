@@ -298,10 +298,258 @@ restart_kiosk_session() {
     fi
 }
 
+# Install management CLI (idempotent)
+install_management_cli() {
+    log "Installing KioskBook management CLI..."
+    
+    # Copy kiosk command to system bin
+    if [[ -f "./kiosk" ]]; then
+        cp ./kiosk /usr/local/bin/kiosk
+        chmod +x /usr/local/bin/kiosk
+        log_success "Management CLI installed: kiosk command available"
+    else
+        log_warning "kiosk script not found in repository"
+    fi
+}
+
+# Setup log rotation (Debian way)
+setup_log_rotation() {
+    log "Setting up log rotation..."
+    
+    # Create logrotate configuration for KioskBook
+    cat > /etc/logrotate.d/kioskbook << 'EOF'
+# KioskBook log rotation
+/var/log/kioskbook/*.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 644 root root
+}
+
+# Systemd journal for kioskbook-app
+{
+    # Handled by systemd, but ensure cleanup
+    postrotate
+        systemctl reload-or-restart rsyslog > /dev/null 2>&1 || true
+    endscript
+}
+EOF
+    
+    # Create log directory
+    mkdir -p /var/log/kioskbook
+    
+    # Test logrotate configuration
+    logrotate -d /etc/logrotate.d/kioskbook >/dev/null 2>&1 || log_warning "Logrotate test failed"
+    
+    log_success "Log rotation configured"
+}
+
+# Setup monitoring and recovery (idempotent)
+setup_monitoring() {
+    log "Setting up monitoring and recovery..."
+    
+    # Create monitoring script
+    cat > /usr/local/bin/kioskbook-monitor << 'EOF'
+#!/bin/bash
+# KioskBook monitoring and recovery script
+
+LOG_FILE="/var/log/kioskbook/monitor.log"
+MAX_MEMORY_MB=2048
+MAX_LOAD=5.0
+
+log_monitor() {
+    echo "$(date): $1" >> "$LOG_FILE"
+}
+
+# Check memory usage
+check_memory() {
+    local memory_mb=$(free -m | awk '/^Mem:/ {print $3}')
+    if [[ $memory_mb -gt $MAX_MEMORY_MB ]]; then
+        log_monitor "HIGH MEMORY: ${memory_mb}MB > ${MAX_MEMORY_MB}MB"
+        return 1
+    fi
+    return 0
+}
+
+# Check system load
+check_load() {
+    local load=$(cat /proc/loadavg | awk '{print $1}')
+    if (( $(awk "BEGIN {print ($load > $MAX_LOAD)}") )); then
+        log_monitor "HIGH LOAD: $load > $MAX_LOAD"
+        return 1
+    fi
+    return 0
+}
+
+# Check if Chromium is running
+check_chromium() {
+    if ! pgrep -f "chromium.*kiosk" >/dev/null; then
+        log_monitor "RECOVERY: Chromium not running, restarting display"
+        systemctl restart lightdm
+        return 1
+    fi
+    return 0
+}
+
+# Check if application is responding
+check_application() {
+    if ! curl -s --max-time 5 http://localhost:5173 >/dev/null; then
+        log_monitor "RECOVERY: Application not responding, restarting service"
+        systemctl restart kioskbook-app
+        return 1
+    fi
+    return 0
+}
+
+# Main monitoring loop
+main() {
+    mkdir -p "$(dirname "$LOG_FILE")"
+    
+    check_memory
+    check_load  
+    check_chromium
+    check_application
+    
+    # Log success if all checks pass
+    if [[ $? -eq 0 ]]; then
+        log_monitor "All systems healthy"
+    fi
+}
+
+main "$@"
+EOF
+    
+    chmod +x /usr/local/bin/kioskbook-monitor
+    
+    log_success "Monitoring system installed"
+}
+
+# Setup scheduled maintenance (Debian cron)
+setup_scheduled_maintenance() {
+    log "Setting up scheduled maintenance..."
+    
+    # Create maintenance cron jobs
+    cat > /etc/cron.d/kioskbook << 'EOF'
+# KioskBook scheduled maintenance
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+# System monitoring every 5 minutes
+*/5 * * * * root /usr/local/bin/kioskbook-monitor
+
+# Daily maintenance at 3 AM
+0 3 * * * root /usr/local/bin/kiosk maintenance
+
+# Weekly system updates on Sunday at 2 AM
+0 2 * * 0 root /usr/local/bin/kiosk update
+
+# Clean old logs daily at 1 AM
+0 1 * * * root journalctl --vacuum-time=7d
+
+# Restart services weekly on Sunday at 4 AM (after updates)
+0 4 * * 0 root /usr/local/bin/kiosk restart
+EOF
+    
+    # Restart cron to pick up new jobs
+    systemctl restart cron
+    
+    log_success "Scheduled maintenance configured"
+}
+
+# Setup system optimization (idempotent)
+setup_system_optimization() {
+    log "Setting up system optimization..."
+    
+    # Create systemd drop-in for journal limits
+    mkdir -p /etc/systemd/journald.conf.d
+    cat > /etc/systemd/journald.conf.d/kioskbook.conf << 'EOF'
+[Journal]
+SystemMaxUse=500M
+RuntimeMaxUse=100M
+MaxRetentionSec=7d
+EOF
+    
+    # Restart journald to apply limits
+    systemctl restart systemd-journald
+    
+    # Create swap management for low memory situations
+    cat > /usr/local/bin/manage-swap << 'EOF'
+#!/bin/bash
+# Manage swap based on memory usage
+
+MEMORY_THRESHOLD=90
+SWAP_FILE="/swapfile"
+SWAP_SIZE="1G"
+
+check_memory() {
+    local memory_percent=$(free | awk '/^Mem:/ {printf "%.0f", $3/$2*100}')
+    if [[ $memory_percent -gt $MEMORY_THRESHOLD ]]; then
+        if [[ ! -f "$SWAP_FILE" ]]; then
+            echo "Creating emergency swap file..."
+            fallocate -l $SWAP_SIZE $SWAP_FILE
+            chmod 600 $SWAP_FILE
+            mkswap $SWAP_FILE
+            swapon $SWAP_FILE
+        fi
+    fi
+}
+
+check_memory
+EOF
+    
+    chmod +x /usr/local/bin/manage-swap
+    
+    log_success "System optimization configured"
+}
+
+# Setup automatic recovery (idempotent)
+setup_automatic_recovery() {
+    log "Setting up automatic recovery..."
+    
+    # Create systemd service for automatic recovery
+    cat > /etc/systemd/system/kioskbook-recovery.service << 'EOF'
+[Unit]
+Description=KioskBook Automatic Recovery
+After=kioskbook-app.service lightdm.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/kioskbook-monitor
+User=root
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    
+    # Create timer for recovery checks
+    cat > /etc/systemd/system/kioskbook-recovery.timer << 'EOF'
+[Unit]
+Description=Run KioskBook recovery checks every 5 minutes
+Requires=kioskbook-recovery.service
+
+[Timer]
+OnCalendar=*:0/5
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+    
+    # Enable and start timer
+    systemctl daemon-reload
+    systemctl enable kioskbook-recovery.timer
+    systemctl start kioskbook-recovery.timer
+    
+    log_success "Automatic recovery enabled"
+}
+
 # Show completion
 show_completion() {
     echo -e "\n${GREEN}═══════════════════════════════════════════════════════${NC}"
-    echo -e "${GREEN}     KioskBook Update Complete!${NC}"
+    echo -e "${GREEN}     KioskBook Production Update Complete!${NC}"
     echo -e "${GREEN}═══════════════════════════════════════════════════════${NC}"
     
     echo -e "\n${CYAN}Updates Applied:${NC}"
@@ -311,7 +559,20 @@ show_completion() {
     echo -e "  ✅ OpenBox autostart updated (port 5173, font rendering)"
     echo -e "  ✅ Systemd service configuration updated"
     echo -e "  ✅ Application code updated"
-    echo -e "  ✅ Kiosk session restarted"
+    echo -e "  ✅ Management CLI installed"
+    echo -e "  ✅ Log rotation configured"
+    echo -e "  ✅ Monitoring and recovery enabled"
+    echo -e "  ✅ Scheduled maintenance configured"
+    echo -e "  ✅ System optimization applied"
+    echo -e "  ✅ Automatic recovery enabled"
+    
+    echo -e "\n${CYAN}New Features:${NC}"
+    echo -e "  🚀 Management CLI: ${YELLOW}kiosk status${NC}, ${YELLOW}kiosk health${NC}, ${YELLOW}kiosk logs${NC}"
+    echo -e "  📊 Real-time monitoring: ${YELLOW}kiosk monitor${NC}"
+    echo -e "  🔄 Automatic recovery: Every 5 minutes"
+    echo -e "  📅 Scheduled maintenance: Daily at 3 AM"
+    echo -e "  📦 Auto-updates: Weekly on Sunday at 2 AM"
+    echo -e "  📝 Log rotation: 7-day retention"
     
     echo -e "\n${CYAN}System Status:${NC}"
     if systemctl is-active --quiet kioskbook-app; then
@@ -321,9 +582,11 @@ show_completion() {
     fi
     
     echo -e "\n${CYAN}Management Commands:${NC}"
-    echo -e "  Status: ${YELLOW}sudo systemctl status kioskbook-app${NC}"
-    echo -e "  Logs: ${YELLOW}sudo journalctl -u kioskbook-app -f${NC}"
-    echo -e "  Health: ${YELLOW}sudo /usr/local/bin/kioskbook-health${NC}"
+    echo -e "  Status: ${YELLOW}kiosk status${NC}"
+    echo -e "  Health: ${YELLOW}kiosk health --detailed${NC}"
+    echo -e "  Logs: ${YELLOW}kiosk logs -f${NC}"
+    echo -e "  Update: ${YELLOW}kiosk update${NC}"
+    echo -e "  Monitor: ${YELLOW}kiosk monitor${NC}"
 }
 
 # Main execution
@@ -336,6 +599,12 @@ main() {
     update_openbox_configuration
     update_systemd_service
     update_application
+    install_management_cli
+    setup_log_rotation
+    setup_monitoring
+    setup_scheduled_maintenance
+    setup_system_optimization
+    setup_automatic_recovery
     restart_kiosk_session
     show_completion
 }

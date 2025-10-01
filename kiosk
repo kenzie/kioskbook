@@ -83,7 +83,7 @@ cmd_status() {
     echo "  Hostname: $(hostname)"
     echo "  Uptime: $(uptime -p)"
     echo "  Load: $(cat /proc/loadavg | awk '{print $1" "$2" "$3}')"
-    echo "  Memory: $(free -h | awk '/^Mem:/ {print $3"/"$2" ("$3/$2*100"%)"}')"
+    echo "  Memory: $(free | awk '/^Mem:/ {printf "%.1fG/%.1fG (%.1f%%)", $3/1024/1024, $2/1024/1024, ($3/$2)*100}')"
     echo "  Disk: $(df -h / | awk 'NR==2 {print $3"/"$2" ("$5")"}')"
     echo
     

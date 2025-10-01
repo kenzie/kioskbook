@@ -301,14 +301,17 @@ restart_kiosk_session() {
 # Install management CLI (idempotent)
 install_management_cli() {
     log "Installing KioskBook management CLI..."
-    
+
+    # Get the directory where this script is located
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
     # Copy kiosk command to system bin
-    if [[ -f "./kiosk" ]]; then
-        cp ./kiosk /usr/local/bin/kiosk
+    if [[ -f "$SCRIPT_DIR/kiosk" ]]; then
+        cp "$SCRIPT_DIR/kiosk" /usr/local/bin/kiosk
         chmod +x /usr/local/bin/kiosk
         log_success "Management CLI installed: kiosk command available"
     else
-        log_warning "kiosk script not found in repository"
+        log_warning "kiosk script not found in repository at $SCRIPT_DIR"
     fi
 }
 

@@ -376,15 +376,37 @@ configure_silent_boot() {
     
     # Configure silent boot parameters in bootloader
     if [ -f /boot/extlinux.conf ]; then
-        # Add silent boot parameters
-        sed -i '/APPEND.*/ { /quiet/!s/APPEND.*/& quiet loglevel=3 console=tty1 vga=current/ }' /boot/extlinux.conf
-        log "Silent boot parameters configured"
+        log "Configuring extlinux for silent boot..."
+        # Create backup
+        cp /boot/extlinux.conf /boot/extlinux.conf.backup
+        
+        # Add comprehensive silent boot parameters
+        sed -i 's/APPEND.*/& quiet loglevel=1 console=ttyS0 rd.systemd.show_status=false rd.udev.log_level=1/' /boot/extlinux.conf
+        
+        log "Updated extlinux.conf:"
+        grep APPEND /boot/extlinux.conf
+    elif [ -f /etc/update-extlinux.conf ]; then
+        log "Configuring update-extlinux for silent boot..."
+        # Update Alpine's extlinux configuration
+        sed -i 's/^default_kernel_opts=.*/default_kernel_opts="quiet loglevel=1 console=ttyS0"/' /etc/update-extlinux.conf
+        update-extlinux
+        log "Updated kernel options via update-extlinux"
+    else
+        log_warning "No bootloader configuration found"
     fi
     
-    # Hide boot messages from console
-    echo 'kernel.printk = 3 4 1 3' >> /etc/sysctl.conf
+    # Suppress OpenRC service messages
+    echo 'rc_logger="YES"' >> /etc/rc.conf
+    echo 'rc_log_path="/dev/null"' >> /etc/rc.conf
+    echo 'rc_verbose="NO"' >> /etc/rc.conf
     
-    log_success "Silent boot configured - clean startup without boot text"
+    # Hide kernel messages
+    echo 'kernel.printk = 1 1 1 1' >> /etc/sysctl.conf
+    
+    # Disable getty on other ttys to reduce noise
+    sed -i 's/^tty[2-6]/#&/' /etc/inittab
+    
+    log_success "Silent boot configured - suppressed OpenRC and kernel messages"
 }
 
 # Optimize boot

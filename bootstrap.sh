@@ -313,7 +313,12 @@ configure_silent_boot() {
     sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=0 console=tty3 rd.systemd.show_status=false rd.udev.log_level=3 systemd.show_status=false"/' /etc/default/grub
     sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=0/' /etc/default/grub
     echo "GRUB_TIMEOUT_STYLE=hidden" >> /etc/default/grub
-    echo "GRUB_TERMINAL=console" >> /etc/default/grub
+    echo 'GRUB_CMDLINE_LINUX=""' >> /etc/default/grub
+    echo "GRUB_TERMINAL_OUTPUT=console" >> /etc/default/grub
+    echo "GRUB_DISABLE_OS_PROBER=true" >> /etc/default/grub
+    echo "GRUB_DISABLE_RECOVERY=true" >> /etc/default/grub
+    echo "GRUB_GFXMODE=text" >> /etc/default/grub
+    echo "GRUB_TERMINAL=" >> /etc/default/grub
     
     # Update GRUB
     update-grub

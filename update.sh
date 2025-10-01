@@ -571,9 +571,40 @@ enhance_silent_boot() {
         updated=true
     fi
     
-    # Disable GRUB graphics for faster boot
-    if ! grep -q "^GRUB_TERMINAL=console" /etc/default/grub; then
-        echo "GRUB_TERMINAL=console" >> /etc/default/grub
+    # Disable GRUB loading messages
+    if ! grep -q "^GRUB_CMDLINE_LINUX=" /etc/default/grub; then
+        echo 'GRUB_CMDLINE_LINUX=""' >> /etc/default/grub
+        updated=true
+    fi
+    
+    # Hide GRUB boot messages completely
+    if ! grep -q "^GRUB_TERMINAL_OUTPUT=" /etc/default/grub; then
+        echo "GRUB_TERMINAL_OUTPUT=console" >> /etc/default/grub
+        updated=true
+    fi
+    
+    # Disable GRUB OS prober to speed up and reduce messages
+    if ! grep -q "^GRUB_DISABLE_OS_PROBER=true" /etc/default/grub; then
+        echo "GRUB_DISABLE_OS_PROBER=true" >> /etc/default/grub
+        updated=true
+    fi
+    
+    # Set GRUB to be completely silent
+    if ! grep -q "^GRUB_DISABLE_RECOVERY=true" /etc/default/grub; then
+        echo "GRUB_DISABLE_RECOVERY=true" >> /etc/default/grub
+        updated=true
+    fi
+    
+    # Force GRUB to not show any messages during boot
+    if ! grep -q "^GRUB_GFXMODE=" /etc/default/grub; then
+        echo "GRUB_GFXMODE=text" >> /etc/default/grub
+        updated=true
+    fi
+    
+    # Completely hide GRUB output
+    if ! grep -q "^GRUB_TERMINAL=" /etc/default/grub; then
+        sed -i 's/^GRUB_TERMINAL=.*//' /etc/default/grub
+        echo "GRUB_TERMINAL=" >> /etc/default/grub
         updated=true
     fi
     

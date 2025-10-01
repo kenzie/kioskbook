@@ -209,24 +209,23 @@ configure_timezone() {
 create_kiosk_user() {
     log_info "Creating kiosk user..."
     
-    # Create kiosk group first
-    chroot "$MOUNT_ROOT" addgroup kiosk || {
-        log_error "Failed to create kiosk group"
-        exit 1
-    }
-    
-    # Create kiosk user and add to kiosk group
-    chroot "$MOUNT_ROOT" adduser -D -s /bin/ash -h /home/kiosk -G kiosk kiosk || {
+    # Create kiosk user with home directory (Alpine Linux syntax)
+    chroot "$MOUNT_ROOT" adduser -D -s /bin/ash -h /home/kiosk kiosk || {
         log_error "Failed to create kiosk user"
         exit 1
     }
     
-    # Add kiosk user to necessary additional groups
-    chroot "$MOUNT_ROOT" addgroup kiosk users || true
-    chroot "$MOUNT_ROOT" addgroup kiosk audio || true
-    chroot "$MOUNT_ROOT" addgroup kiosk video || true
-    chroot "$MOUNT_ROOT" addgroup kiosk input || true
-    chroot "$MOUNT_ROOT" addgroup kiosk netdev || true
+    # Set password for kiosk user (disabled by default with -D)
+    chroot "$MOUNT_ROOT" passwd -d kiosk || {
+        log_warning "Failed to disable password for kiosk user"
+    }
+    
+    # Add kiosk user to necessary groups (use adduser for group membership)
+    chroot "$MOUNT_ROOT" adduser kiosk users || true
+    chroot "$MOUNT_ROOT" adduser kiosk audio || true
+    chroot "$MOUNT_ROOT" adduser kiosk video || true
+    chroot "$MOUNT_ROOT" adduser kiosk input || true
+    chroot "$MOUNT_ROOT" adduser kiosk netdev || true
     
     # Set up autologin for kiosk user on tty1
     mkdir -p "$MOUNT_ROOT/etc/conf.d"

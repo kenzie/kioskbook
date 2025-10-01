@@ -142,12 +142,11 @@ auto eth0
 iface eth0 inet dhcp
 EOF
     
-    # Timezone
-    setup-timezone -z UTC
+    # Timezone (skip tzdata package issues, set manually later)
+    echo "UTC" > /etc/timezone || log_warning "Timezone setup skipped"
     
-    # SSH
-    rc-update add sshd default
-    rc-service sshd start
+    # SSH (enable for later, don't start now to avoid issues)
+    rc-update add sshd default 2>/dev/null || log_warning "SSH setup skipped"
     
     # Set root password
     log "Setting root password..."

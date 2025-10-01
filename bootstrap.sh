@@ -63,6 +63,28 @@ check_prerequisites() {
         fi
     fi
     
+    # Configure APK repositories first (moved from install_system)
+    log "Configuring Alpine repositories..."
+    
+    # Detect Alpine version
+    local alpine_version
+    if [ -f /etc/alpine-release ]; then
+        alpine_version="v$(cat /etc/alpine-release | cut -d. -f1,2)"
+        log "Detected Alpine version: $alpine_version"
+    else
+        alpine_version="v3.22"
+        log_warning "Could not detect Alpine version, using $alpine_version"
+    fi
+    
+    # Configure repositories for the live system
+    cat > /etc/apk/repositories << EOF
+http://dl-cdn.alpinelinux.org/alpine/${alpine_version}/main
+http://dl-cdn.alpinelinux.org/alpine/${alpine_version}/community
+EOF
+    
+    # Update package index
+    apk update || log_warning "Failed to update package index"
+    
     # Check for required tools (most should be available in Alpine Live)
     log "Checking for required tools..."
     
@@ -83,8 +105,8 @@ check_prerequisites() {
     
     if [ -n "$missing_tools" ]; then
         log "Installing missing tools:$missing_tools"
-        # Try to install just the missing tools, ignore firmware bloat errors
-        apk add $missing_tools 2>/dev/null || log_warning "Some tools may be missing (continuing anyway)"
+        # Now we can install tools since repositories are configured
+        apk add $missing_tools || log_warning "Some tools may be missing (continuing anyway)"
     else
         log_success "All required tools already available"
     fi
@@ -145,30 +167,14 @@ EOF
     # Timezone (skip tzdata package issues, set manually later)
     echo "UTC" > /etc/timezone || log_warning "Timezone setup skipped"
     
-    # SSH (enable for later, don't start now to avoid issues)
-    rc-update add sshd default 2>/dev/null || log_warning "SSH setup skipped"
-    
-    # Configure APK repositories first
-    log "Configuring Alpine repositories..."
-    
-    # Detect Alpine version
-    local alpine_version
-    if [ -f /etc/alpine-release ]; then
-        alpine_version="v$(cat /etc/alpine-release | cut -d. -f1,2)"
-        log "Detected Alpine version: $alpine_version"
+    # Install and enable SSH (repositories are now configured)
+    log "Installing and configuring SSH..."
+    if apk add openssh; then
+        rc-update add sshd default || log_warning "Failed to enable SSH service"
+        log_success "SSH configured"
     else
-        alpine_version="v3.22"
-        log_warning "Could not detect Alpine version, using $alpine_version"
+        log_warning "SSH installation failed"
     fi
-    
-    # Configure repositories for the live system
-    cat > /etc/apk/repositories << EOF
-http://dl-cdn.alpinelinux.org/alpine/${alpine_version}/main
-http://dl-cdn.alpinelinux.org/alpine/${alpine_version}/community
-EOF
-    
-    # Update package index
-    apk update || log_warning "Failed to update package index"
     
     # Set root password
     log "Setting root password..."

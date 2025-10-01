@@ -94,27 +94,24 @@ update_system() {
 install_base_packages() {
     log "Installing base packages..."
     
-    # Essential packages that should exist in Alpine main repository
-    apk add \
-        bash \
-        git \
-        curl \
-        wget \
-        htop \
-        nano \
-        util-linux \
-        pciutils \
-        usbutils \
-        coreutils \
-        shadow \
-        sudo \
-        openrc \
-        busybox-initscripts \
-        openssh \
-        ca-certificates \
-        tzdata
+    # Install packages individually to avoid one failure breaking everything
+    local packages="bash git curl wget htop nano util-linux pciutils usbutils coreutils shadow sudo openrc openssh ca-certificates tzdata"
+    
+    for pkg in $packages; do
+        if apk add "$pkg" 2>/dev/null; then
+            log "✓ Installed $pkg"
+        else
+            log_warning "✗ Failed to install $pkg (package may not exist)"
+        fi
+    done
+    
+    # Try busybox-init instead of busybox-initscripts
+    if ! apk add busybox-initscripts 2>/dev/null; then
+        log_warning "busybox-initscripts not found, trying alternatives..."
+        apk add busybox-init 2>/dev/null || apk add busybox 2>/dev/null || log_warning "Could not install busybox init scripts"
+    fi
         
-    log_success "Base packages installed"
+    log_success "Base packages installation completed"
 }
 
 # Install display stack

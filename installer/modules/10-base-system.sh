@@ -211,16 +211,39 @@ create_kiosk_user() {
     
     # Check if kiosk user already exists
     if chroot "$MOUNT_ROOT" id kiosk >/dev/null 2>&1; then
-        log_info "Kiosk user already exists, removing and recreating for clean state..."
+        log_info "Kiosk user already exists, attempting thorough cleanup..."
         
-        # Remove existing user and home directory
-        chroot "$MOUNT_ROOT" deluser --remove-home kiosk 2>/dev/null || true
+        # Kill any processes owned by kiosk user
+        chroot "$MOUNT_ROOT" pkill -u kiosk 2>/dev/null || true
+        
+        # Remove user from all groups first
+        chroot "$MOUNT_ROOT" deluser kiosk users 2>/dev/null || true
+        chroot "$MOUNT_ROOT" deluser kiosk audio 2>/dev/null || true
+        chroot "$MOUNT_ROOT" deluser kiosk video 2>/dev/null || true
+        chroot "$MOUNT_ROOT" deluser kiosk input 2>/dev/null || true
+        chroot "$MOUNT_ROOT" deluser kiosk netdev 2>/dev/null || true
+        
+        # Remove user and home directory
+        chroot "$MOUNT_ROOT" deluser kiosk 2>/dev/null || true
         chroot "$MOUNT_ROOT" delgroup kiosk 2>/dev/null || true
         
-        # Clean up any remaining files
+        # Force remove home directory and any locks
         rm -rf "$MOUNT_ROOT/home/kiosk" 2>/dev/null || true
+        rm -f "$MOUNT_ROOT/etc/passwd.lock" "$MOUNT_ROOT/etc/shadow.lock" "$MOUNT_ROOT/etc/group.lock" 2>/dev/null || true
         
-        log_info "Existing kiosk user removed, creating fresh user..."
+        # Wait a moment for system cleanup
+        sleep 1
+        
+        # Verify user is gone
+        if chroot "$MOUNT_ROOT" id kiosk >/dev/null 2>&1; then
+            log_error "Failed to remove existing kiosk user completely"
+            log_info "Manual cleanup required. Current user info:"
+            chroot "$MOUNT_ROOT" id kiosk || true
+            chroot "$MOUNT_ROOT" grep kiosk /etc/passwd || true
+            exit 1
+        fi
+        
+        log_info "Existing kiosk user removed successfully"
     fi
     
     # Create kiosk user with home directory (Alpine Linux syntax)

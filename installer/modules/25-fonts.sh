@@ -136,24 +136,28 @@ install_inter_font() {
     # Clear existing fonts first to avoid conflicts
     rm -f "$font_path"/*.ttf "$font_path"/*.woff2 2>/dev/null || true
     
-    # Function to copy files without prompts (bypass any cp aliases)
+    # Function to copy files without prompts (using dd instead of cp)
     copy_file() {
         local src="$1"
-        local dst="$2"
+        local dst_dir="$2"
         if [[ -f "$src" ]]; then
-            /bin/cp "$src" "$dst" 2>/dev/null || true
+            local basename_file
+            basename_file=$(basename "$src")
+            dd if="$src" of="$dst_dir/$basename_file" bs=1M 2>/dev/null || true
             return 0
         fi
         return 1
     }
     
-    # Function to copy multiple files without prompts
+    # Function to copy multiple files without prompts (using dd instead of cp)
     copy_files_from_dir() {
         local dir="$1"
         local pattern="$2"
         if [[ -d "$dir" ]]; then
             find "$dir" -name "$pattern" -print0 | while IFS= read -r -d '' file; do
-                /bin/cp "$file" "$font_path/" 2>/dev/null || true
+                local basename_file
+                basename_file=$(basename "$file")
+                dd if="$file" of="$font_path/$basename_file" bs=1M 2>/dev/null || true
             done
             return 0
         fi
@@ -161,7 +165,7 @@ install_inter_font() {
     }
     
     # Variable font (recommended)
-    if copy_file "Inter-Variable.ttf" "$font_path/"; then
+    if copy_file "Inter-Variable.ttf" "$font_path"; then
         log_info "Installed Inter Variable font"
     fi
     
@@ -271,16 +275,18 @@ install_caskaydia_font() {
     # Clear existing fonts first to avoid conflicts
     rm -f "$font_path"/*.ttf 2>/dev/null || true
     
-    # Function to copy fonts without prompts (bypass any cp aliases)
+    # Function to copy fonts without prompts (bypass cp entirely using dd)
     copy_fonts() {
         local pattern="$1"
         local description="$2"
         
         if find . -name "$pattern" -print -quit | grep -q .; then
             log_info "Found $description"
-            # Use /bin/cp directly to bypass shell aliases and ensure non-interactive
+            # Use dd instead of cp to completely bypass any cp issues
             find . -name "$pattern" -print0 | while IFS= read -r -d '' file; do
-                /bin/cp "$file" "$font_path/" 2>/dev/null || true
+                local basename_file
+                basename_file=$(basename "$file")
+                dd if="$file" of="$font_path/$basename_file" bs=1M 2>/dev/null || true
             done
             return 0
         fi

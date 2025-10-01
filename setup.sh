@@ -94,6 +94,7 @@ update_system() {
 install_base_packages() {
     log "Installing base packages..."
     
+    # Essential packages that should exist in Alpine main repository
     apk add \
         bash \
         git \
@@ -108,7 +109,10 @@ install_base_packages() {
         shadow \
         sudo \
         openrc \
-        busybox-initscripts
+        busybox-initscripts \
+        openssh \
+        ca-certificates \
+        tzdata
         
     log_success "Base packages installed"
 }

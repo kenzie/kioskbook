@@ -273,11 +273,29 @@ EOF
         cp /etc/resolv.conf /mnt/target/etc/ || log_warning "Failed to copy DNS settings"
     fi
     
-    # Copy APK repositories
-    if [ -f /etc/apk/repositories ]; then
-        mkdir -p /mnt/target/etc/apk
-        cp /etc/apk/repositories /mnt/target/etc/apk/ || log_warning "Failed to copy repositories"
+    # Configure proper APK repositories for Alpine 3.22
+    log "Configuring APK repositories for installed system..."
+    mkdir -p /mnt/target/etc/apk
+    
+    # Detect actual Alpine version and configure correct repositories
+    local alpine_version
+    if [ -f /etc/alpine-release ]; then
+        alpine_version="v$(cat /etc/alpine-release | cut -d. -f1,2)"
+        log "Detected Alpine version: $alpine_version"
+    else
+        alpine_version="v3.22"
+        log_warning "Could not detect Alpine version, using $alpine_version"
     fi
+    
+    # Write correct repositories for the detected version
+    cat > /mnt/target/etc/apk/repositories << EOF
+http://dl-cdn.alpinelinux.org/alpine/${alpine_version}/main
+http://dl-cdn.alpinelinux.org/alpine/${alpine_version}/community
+@edge http://dl-cdn.alpinelinux.org/alpine/edge/main
+@testing http://dl-cdn.alpinelinux.org/alpine/edge/testing
+EOF
+    
+    log_success "APK repositories configured for Alpine ${alpine_version}"
     
     # Download setup.sh directly to the installed system
     log "Downloading setup.sh to installed system..."

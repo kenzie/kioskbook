@@ -154,9 +154,21 @@ install_fonts() {
     # Install Nerd Fonts
     mkdir -p /usr/share/fonts/nerd-fonts
     cd /tmp
+    
+    # Clean any existing files first
+    rm -f CascadiaCode.zip 2>/dev/null || true
+    rm -rf /usr/share/fonts/nerd-fonts/* 2>/dev/null || true
+    
+    # Download CascadiaCode font
+    log "Downloading CascadiaCode Nerd Font..."
     wget -q https://github.com/ryanoasis/nerd-fonts/releases/latest/download/CascadiaCode.zip
-    unzip -q CascadiaCode.zip -d /usr/share/fonts/nerd-fonts/
-    rm CascadiaCode.zip
+    
+    # Extract fonts using unzip with force overwrite
+    log "Extracting fonts..."
+    unzip -o -q CascadiaCode.zip -d /usr/share/fonts/nerd-fonts/
+    
+    # Clean up
+    rm -f CascadiaCode.zip
     
     # Update font cache
     fc-cache -fv >/dev/null 2>&1
@@ -167,6 +179,28 @@ install_fonts() {
 # Create kiosk user
 create_kiosk_user() {
     log "Creating kiosk user..."
+    
+    # Check if user already exists and clean up if needed
+    if id "$KIOSK_USER" >/dev/null 2>&1; then
+        log "Kiosk user already exists, removing for clean setup..."
+        
+        # Kill any processes owned by kiosk user
+        pkill -u "$KIOSK_USER" 2>/dev/null || true
+        
+        # Remove user from groups
+        deluser "$KIOSK_USER" users 2>/dev/null || true
+        deluser "$KIOSK_USER" audio 2>/dev/null || true
+        deluser "$KIOSK_USER" video 2>/dev/null || true
+        
+        # Remove user and home directory
+        deluser --remove-home "$KIOSK_USER" 2>/dev/null || true
+        
+        # Clean up any remaining files
+        rm -rf "$KIOSK_HOME" 2>/dev/null || true
+        
+        # Wait for cleanup
+        sleep 1
+    fi
     
     # Create user
     adduser -D -s /bin/bash $KIOSK_USER

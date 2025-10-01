@@ -222,25 +222,13 @@ create_kiosk_user() {
     # Backup original inittab
     cp /etc/inittab /etc/inittab.backup 2>/dev/null || true
     
-    # Use Alpine's correct auto-login method
-    if command -v agetty >/dev/null; then
-        # Alpine uses agetty for auto-login
-        if sed -i "s/^tty1:.*/tty1::respawn:\/sbin\/agetty --autologin $KIOSK_USER --noclear tty1 linux/" /etc/inittab; then
-            log_success "Auto-login configured with agetty"
-        else
-            log_error "Failed to configure agetty auto-login"
-            exit 1
-        fi
-    else
-        # Fallback to simple su method (most reliable)
-        log "agetty not found, using su method..."
-        if sed -i "s/^tty1:.*/tty1::respawn:\/bin\/su - $KIOSK_USER/" /etc/inittab; then
-            log_success "Auto-login configured with su method"
-        else
-            log_error "Failed to configure su auto-login"
-            exit 1
-        fi
-    fi
+    # Use simple and reliable auto-login method
+    log "Configuring auto-login with su method (most reliable)..."
+    
+    # Replace tty1 line with direct su login
+    sed -i "s/^tty1:.*/tty1::respawn:\/bin\/su - $KIOSK_USER <\/dev\/tty1 >\/dev\/tty1 2>\&1/" /etc/inittab
+    
+    log_success "Auto-login configured with su method"
     
     # Verify the auto-login configuration
     if grep -q "$KIOSK_USER" /etc/inittab; then
@@ -380,31 +368,53 @@ configure_silent_boot() {
         # Create backup
         cp /boot/extlinux.conf /boot/extlinux.conf.backup
         
-        # Add comprehensive silent boot parameters
-        sed -i 's/APPEND.*/& quiet loglevel=1 console=ttyS0 rd.systemd.show_status=false rd.udev.log_level=1/' /boot/extlinux.conf
+        # Replace APPEND line with comprehensive silent boot parameters
+        sed -i 's/^.*APPEND.*/\tAPPEND root=\/dev\/sda2 rw quiet loglevel=0 console=tty12 vga=current splash=silent,fadein,fadeout/' /boot/extlinux.conf
         
         log "Updated extlinux.conf:"
         grep APPEND /boot/extlinux.conf
     elif [ -f /etc/update-extlinux.conf ]; then
         log "Configuring update-extlinux for silent boot..."
-        # Update Alpine's extlinux configuration
-        sed -i 's/^default_kernel_opts=.*/default_kernel_opts="quiet loglevel=1 console=ttyS0"/' /etc/update-extlinux.conf
+        # Update Alpine's extlinux configuration  
+        sed -i 's/^default_kernel_opts=.*/default_kernel_opts="quiet loglevel=0 console=tty12 vga=current"/' /etc/update-extlinux.conf
         update-extlinux
         log "Updated kernel options via update-extlinux"
     else
         log_warning "No bootloader configuration found"
     fi
     
-    # Suppress OpenRC service messages
-    echo 'rc_logger="YES"' >> /etc/rc.conf
-    echo 'rc_log_path="/dev/null"' >> /etc/rc.conf
-    echo 'rc_verbose="NO"' >> /etc/rc.conf
+    # Create comprehensive OpenRC silent configuration
+    cat > /etc/rc.conf << 'EOF'
+# OpenRC silent boot configuration
+rc_logger="YES"
+rc_log_path="/dev/null"
+rc_verbose="NO"
+rc_parallel="YES"
+rc_interactive="NO"
+rc_quiet="YES"
+rc_color="NO"
+EOF
     
-    # Hide kernel messages
-    echo 'kernel.printk = 1 1 1 1' >> /etc/sysctl.conf
+    # Suppress all kernel messages during boot
+    echo 'kernel.printk = 0 0 0 0' >> /etc/sysctl.conf
     
-    # Disable getty on other ttys to reduce noise
+    # Hide console messages during boot
+    cat > /etc/sysctl.d/silent-boot.conf << 'EOF'
+# Silent boot sysctl settings
+kernel.printk = 0 0 0 0
+kernel.printk_ratelimit = 0
+kernel.printk_ratelimit_burst = 0
+EOF
+    
+    # Disable getty on unused ttys 
     sed -i 's/^tty[2-6]/#&/' /etc/inittab
+    
+    # Redirect bootloader messages
+    if [ -f /boot/extlinux.conf ]; then
+        # Set extlinux timeout to 0 for instant boot
+        sed -i 's/^TIMEOUT.*/TIMEOUT 0/' /boot/extlinux.conf
+        sed -i 's/^PROMPT.*/PROMPT 0/' /boot/extlinux.conf
+    fi
     
     log_success "Silent boot configured - suppressed OpenRC and kernel messages"
 }
@@ -417,43 +427,36 @@ optimize_boot() {
     rc-update del acpid default 2>/dev/null || true
     rc-update del crond default 2>/dev/null || true
     
-    # Move network services to start after kiosk display (faster boot to display)
-    rc-update del networking default 2>/dev/null || true
+    # Only move SSH to delayed startup, keep basic networking for system functionality
+    # Note: Networking is needed for Tailscale, updates, and remote management
     rc-update del sshd default 2>/dev/null || true
     
-    # Create delayed network services that start after kiosk display
-    cat > /etc/init.d/network-services << 'EOF'
+    # Create delayed SSH service that starts after kiosk display
+    cat > /etc/init.d/ssh-delayed << 'EOF'
 #!/sbin/openrc-run
 
-name="Network Services (Delayed)"
-description="Start networking and SSH after kiosk display is up"
+name="SSH Daemon (Delayed)"
+description="Start SSH after kiosk display is up"
 
 depend() {
+    need networking
     after kiosk-app
 }
 
 start() {
-    ebegin "Starting delayed networking"
-    /etc/init.d/networking start
-    eend $? || return 1
-    
-    # Wait for network to be ready
-    sleep 2
-    
     ebegin "Starting delayed SSH daemon"
     /etc/init.d/sshd start
     eend $?
 }
 
 stop() {
-    ebegin "Stopping network services"
+    ebegin "Stopping SSH daemon"
     /etc/init.d/sshd stop
-    /etc/init.d/networking stop
     eend $?
 }
 EOF
-    chmod +x /etc/init.d/network-services
-    rc-update add network-services default
+    chmod +x /etc/init.d/ssh-delayed
+    rc-update add ssh-delayed default
     
     # Pre-generate SSH host keys to avoid first-boot delay
     log "Pre-generating SSH host keys..."
@@ -465,7 +468,7 @@ EOF
         echo "GSSAPIAuthentication no" >> /etc/ssh/sshd_config
     fi
     
-    log_success "Boot optimized - network and SSH will start after kiosk display"
+    log_success "Boot optimized - SSH will start after kiosk display, networking remains available"
 }
 
 # Install Tailscale (if key provided)

@@ -19,7 +19,6 @@ NC='\033[0m'
 
 # Configuration
 TARGET_DISK="/dev/sda"
-MOUNT_ROOT="/mnt"
 HOSTNAME="kioskbook"
 
 # Logging
@@ -28,13 +27,9 @@ log_success() { printf "${GREEN}[SUCCESS]${NC} %s\n" "$1"; }
 log_warning() { printf "${YELLOW}[WARNING]${NC} %s\n" "$1"; }
 log_error() { printf "${RED}[ERROR]${NC} %s\n" "$1"; }
 
-# Forward declaration for cleanup
-cleanup() { :; }
-
-# Error handler with cleanup
+# Error handler
 error_exit() {
     log_error "$1"
-    cleanup
     exit 1
 }
 
@@ -57,11 +52,6 @@ check_prerequisites() {
         error_exit "This script must be run as root"
     fi
     
-    # Check if running from live environment
-    if [ -d "/mnt/sda1" ]; then
-        error_exit "System appears to be already installed. Run from Alpine Live USB."
-    fi
-    
     # Check network
     if ! ping -c 1 8.8.8.8 >/dev/null 2>&1; then
         log_warning "No network detected, setting up..."
@@ -73,36 +63,28 @@ check_prerequisites() {
         fi
     fi
     
+    # Install required tools
+    apk add alpine-conf parted e2fsprogs syslinux
+    
     log_success "Prerequisites checked"
 }
 
-# Partition disk
-partition_disk() {
-    log "Partitioning disk $TARGET_DISK..."
+# Prepare disk
+prepare_disk() {
+    log "Preparing disk $TARGET_DISK..."
     
     # Check if disk exists
     if [ ! -b "$TARGET_DISK" ]; then
         error_exit "Disk $TARGET_DISK not found"
     fi
     
-    # Unmount any existing partitions on target disk
+    # Unmount any existing partitions
     log "Unmounting any existing partitions..."
     for partition in ${TARGET_DISK}*; do
         if [ -b "$partition" ] && mount | grep -q "$partition"; then
-            log "Unmounting $partition..."
             umount -f "$partition" 2>/dev/null || true
         fi
     done
-    
-    # Also unmount if mounted at standard locations
-    umount -f /mnt 2>/dev/null || true
-    umount -f /mnt/dev 2>/dev/null || true
-    umount -f /mnt/proc 2>/dev/null || true
-    umount -f /mnt/sys 2>/dev/null || true
-    
-    # Deactivate any LVM/RAID if present
-    vgchange -an 2>/dev/null || true
-    mdadm --stop --scan 2>/dev/null || true
     
     # Confirm disk wipe
     echo -e "\n${YELLOW}WARNING: This will ERASE ALL DATA on $TARGET_DISK${NC}"
@@ -112,152 +94,73 @@ partition_disk() {
         error_exit "Aborted by user"
     fi
     
-    # Wipe and partition
-    log "Creating partition table..."
-    dd if=/dev/zero of=$TARGET_DISK bs=1M count=10 2>/dev/null
-    wipefs -af $TARGET_DISK
-    partprobe $TARGET_DISK 2>/dev/null || true
-    
-    parted -s $TARGET_DISK mklabel msdos
-    parted -s $TARGET_DISK mkpart primary ext4 1MiB 100%
-    parted -s $TARGET_DISK set 1 boot on
-    
-    # Let kernel re-read partition table
-    partprobe $TARGET_DISK 2>/dev/null || true
-    sleep 1
-    
-    # Format
-    log "Formatting partition..."
-    mkfs.ext4 -F ${TARGET_DISK}1
-    
-    log_success "Disk partitioned and formatted"
+    log_success "Disk prepared"
 }
 
-# Install base system
-install_base() {
-    log "Installing Alpine base system..."
+# Install Alpine system
+install_system() {
+    log "Installing Alpine Linux to $TARGET_DISK..."
     
-    # Mount target
-    mount ${TARGET_DISK}1 $MOUNT_ROOT
-    
-    # Configure repositories for correct Alpine version
-    local alpine_version
-    if [ -f "/etc/alpine-release" ]; then
-        alpine_version="v$(cat /etc/alpine-release | cut -d. -f1,2)"
-    else
-        alpine_version="v3.22"
-    fi
-    
-    cat > /etc/apk/repositories << EOF
-http://dl-cdn.alpinelinux.org/alpine/${alpine_version}/main
-http://dl-cdn.alpinelinux.org/alpine/${alpine_version}/community
-EOF
-    
-    # Update package index
-    apk update
-    
-    # Install base packages
-    apk add --root $MOUNT_ROOT --initdb alpine-base
-    
-    # Copy repositories config
-    cp /etc/apk/repositories $MOUNT_ROOT/etc/apk/
-    
-    log_success "Base system installed"
-}
-
-# Install kernel and bootloader
-install_kernel() {
-    log "Installing kernel and bootloader..."
-    
-    # Mount necessary filesystems
-    mount --bind /dev $MOUNT_ROOT/dev
-    mount --bind /proc $MOUNT_ROOT/proc
-    mount --bind /sys $MOUNT_ROOT/sys
-    
-    # Install kernel (linux-lts for hardware, linux-virt for VM)
-    chroot $MOUNT_ROOT apk add linux-lts linux-firmware-none mkinitfs
-    
-    # Install bootloader
-    chroot $MOUNT_ROOT apk add syslinux
-    
-    # Configure bootloader
-    cat > $MOUNT_ROOT/boot/extlinux.conf << EOF
-DEFAULT kioskbook
-PROMPT 0
-TIMEOUT 10
-
-LABEL kioskbook
-    LINUX vmlinuz-lts
-    INITRD initramfs-lts
-    APPEND root=${TARGET_DISK}1 rw modules=sd-mod,usb-storage,ext4 quiet
-EOF
-    
-    # Install bootloader to disk
-    extlinux --install $MOUNT_ROOT/boot
-    dd if=/usr/share/syslinux/mbr.bin of=$TARGET_DISK bs=440 count=1
-    
-    # Generate initramfs
-    chroot $MOUNT_ROOT mkinitfs -F "ata base ide scsi usb virtio ext4" $(ls $MOUNT_ROOT/lib/modules/)
-    
-    log_success "Kernel and bootloader installed"
-}
-
-# Configure base system
-configure_base() {
-    log "Configuring base system..."
-    
-    # Set hostname
-    echo "$HOSTNAME" > $MOUNT_ROOT/etc/hostname
-    
-    # Configure networking
-    cat > $MOUNT_ROOT/etc/network/interfaces << EOF
-auto lo
+    # Configure answers for setup-alpine
+    cat > /tmp/answerfile << EOF
+KEYMAPOPTS="us us"
+HOSTNAMEOPTS="$HOSTNAME"
+INTERFACESOPTS="auto lo
 iface lo inet loopback
 
 auto eth0
-iface eth0 inet dhcp
+iface eth0 inet dhcp"
+DNSOPTS=""
+TIMEZONEOPTS="UTC"
+PROXYOPTS="none"
+APKREPOSOPTS="-1"
+SSHDOPTS="-c openssh"
+NTPOPTS="-c busybox"
+DISKOPTS="-m sys $TARGET_DISK"
+LBUOPTS=""
+APKCACHEOPTS=""
 EOF
     
-    # Enable essential services
-    chroot $MOUNT_ROOT rc-update add networking boot
-    chroot $MOUNT_ROOT rc-update add urandom boot
-    chroot $MOUNT_ROOT rc-update add bootmisc boot
-    chroot $MOUNT_ROOT rc-update add hostname boot
-    chroot $MOUNT_ROOT rc-update add syslog boot
-    chroot $MOUNT_ROOT rc-update add klogd boot
+    # Run setup-alpine with answerfile
+    log "Running Alpine installer..."
+    setup-alpine -f /tmp/answerfile
     
-    # Set root password
-    log "Setting root password..."
-    echo -e "\n${CYAN}Enter root password:${NC}"
-    chroot $MOUNT_ROOT passwd
+    # The above will handle partitioning, formatting, and base install
+    # It will also set root password interactively
     
-    # Create setup script marker
-    touch $MOUNT_ROOT/root/.needs_kiosk_setup
+    log_success "Alpine system installed"
+}
+
+# Post-install configuration
+post_install() {
+    log "Configuring installed system..."
+    
+    # Mount the installed system
+    mkdir -p /mnt/target
+    mount ${TARGET_DISK}1 /mnt/target 2>/dev/null || mount ${TARGET_DISK}2 /mnt/target
     
     # Copy setup.sh if it exists
     if [ -f "setup.sh" ]; then
-        cp setup.sh $MOUNT_ROOT/root/
-        chmod +x $MOUNT_ROOT/root/setup.sh
+        cp setup.sh /mnt/target/root/
+        chmod +x /mnt/target/root/setup.sh
         log_success "Copied setup.sh to /root/"
+    else
+        log_warning "setup.sh not found in current directory"
     fi
     
-    log_success "Base system configured"
-}
-
-# Cleanup (override forward declaration)
-cleanup() {
-    log "Cleaning up..."
+    # Create setup marker
+    touch /mnt/target/root/.needs_kiosk_setup
     
-    # Kill any processes using the mount
-    fuser -km $MOUNT_ROOT 2>/dev/null || true
+    # Ensure kernel parameters for quiet boot
+    if [ -f /mnt/target/etc/update-extlinux.conf ]; then
+        sed -i 's/^default_kernel_opts=.*/default_kernel_opts="quiet"/' /mnt/target/etc/update-extlinux.conf
+        chroot /mnt/target update-extlinux
+    fi
     
-    # Unmount filesystems in reverse order
-    umount -f $MOUNT_ROOT/dev 2>/dev/null || true
-    umount -f $MOUNT_ROOT/proc 2>/dev/null || true  
-    umount -f $MOUNT_ROOT/sys 2>/dev/null || true
-    umount -f $MOUNT_ROOT 2>/dev/null || true
+    # Unmount
+    umount /mnt/target
     
-    log_success "Cleanup complete"
+    log_success "Post-install configuration complete"
 }
 
 # Show completion
@@ -274,7 +177,7 @@ show_completion() {
     echo -e "\n${CYAN}The system now has:${NC}"
     echo -e "  ✓ Alpine Linux base system"
     echo -e "  ✓ Linux kernel and drivers"
-    echo -e "  ✓ EXTLINUX bootloader"
+    echo -e "  ✓ Bootloader configured"
     echo -e "  ✓ Basic networking"
     echo -e "  ✓ Root access configured"
 }
@@ -283,11 +186,9 @@ show_completion() {
 main() {
     show_banner
     check_prerequisites
-    partition_disk
-    install_base
-    install_kernel
-    configure_base
-    cleanup
+    prepare_disk
+    install_system
+    post_install
     show_completion
 }
 

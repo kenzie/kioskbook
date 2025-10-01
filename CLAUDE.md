@@ -8,24 +8,18 @@ KioskBook is a bulletproof kiosk deployment platform for Lenovo M75q-1 hardware.
 
 ## Architecture
 
-### Modular Alpine Linux Installation
+### Alpine Linux Installation
 
-The core of KioskBook is a modular installer system built on Alpine Linux, consisting of `bootstrap.sh` and `main.sh` with specialized modules that transform a minimal Alpine installation into a bulletproof kiosk system.
+The core of KioskBook is a two-phase installer system built on Alpine Linux that transforms a minimal Alpine installation into a bulletproof kiosk system.
 
 **Prerequisites:**
 - Alpine Linux Live USB or minimal installation
 - Root access
-- Internet connectivity (configured automatically if needed)
+- Internet connectivity
 
 **Installation Flow:**
-1. **Bootstrap Phase** (`bootstrap.sh`): Network setup, package manager configuration, repository cloning
-2. **Partition Module** (`00-partition.sh`): Disk partitioning and filesystem setup
-3. **Base System** (`10-base-system.sh`): Core Alpine packages and system configuration
-4. **Boot Optimization** (`20-boot-optimization.sh`): GRUB/syslinux with Plymouth silent boot
-5. **Font Installation** (`25-fonts.sh`): Inter and CaskaydiaCove Nerd Font with fontconfig
-6. **Display Stack** (`30-display.sh`): X11, Chromium, AMD drivers, kiosk user setup
-7. **Application Setup** (`50-application.sh`): Node.js app deployment and systemd services
-8. **Monitoring & Recovery** (`70-monitoring.sh`): Health checks, auto-recovery, remote access
+1. **Bootstrap Phase** (`bootstrap.sh`): Network setup, package manager configuration, repository cloning, basic Alpine installation
+2. **Setup Phase** (`setup.sh`): Complete kiosk transformation including display stack, fonts, applications, and configuration
 
 ### System Components
 
@@ -55,13 +49,13 @@ The core of KioskBook is a modular installer system built on Alpine Linux, consi
 ```bash
 # Boot from Alpine Linux Live USB
 # Download and run bootstrap
-wget -O - https://raw.githubusercontent.com/kenzie/kioskbook/alpine-rewrite/installer/bootstrap.sh | ash
+wget -O - https://raw.githubusercontent.com/kenzie/kioskbook/main/bootstrap.sh | ash
 
 # Or manually:
-git clone -b alpine-rewrite https://github.com/kenzie/kioskbook.git
-cd kioskbook/installer
+git clone https://github.com/kenzie/kioskbook.git
+cd kioskbook
 ash bootstrap.sh
-bash main.sh [github_repo] [tailscale_key]
+ash setup.sh [github_repo] [tailscale_key]
 ```
 
 ### Management
@@ -144,30 +138,31 @@ The kiosk system is designed to run Vue.js applications. Default application rep
 - Git-based update mechanism for applications
 - Centralized logging for troubleshooting
 
-## Installation System Development
+## Installation System
 
-The Alpine rewrite uses a modular installer system:
+KioskBook uses a simple two-phase installer system:
 
 ### Bootstrap Script (`bootstrap.sh`)
 1. **POSIX sh compatibility**: Uses Alpine's busybox shell
 2. **Network configuration**: Automatic setup if needed
 3. **Package manager**: Configure Alpine package repositories
-4. **Repository cloning**: Download installer modules
+4. **Repository cloning**: Download KioskBook configuration and scripts
 
-### Main Installer (`main.sh`) 
-1. **Modular execution**: Each phase is a separate module
-2. **Error handling**: Comprehensive rollback on failure (set -e)
+### Setup Script (`setup.sh`)
+1. **Complete system transformation**: Single script that handles all kiosk setup
+2. **Error handling**: Robust error handling and cleanup
 3. **Minimal prompts**: Only GitHub repo and Tailscale key required
-4. **Progress display**: Color-coded output with clear phase indicators
+4. **Progress display**: Clear status output for each installation phase
 
-### Module Development Guidelines
-1. **00-partition.sh**: Disk partitioning with persistent data partition
-2. **10-base-system.sh**: Core Alpine packages and system configuration
-3. **20-boot-optimization.sh**: Silent boot with Plymouth Route 19 theme
-4. **25-fonts.sh**: Inter and CaskaydiaCove font installation with fontconfig
-5. **30-display.sh**: X11, Chromium, kiosk user with auto-login
-6. **50-application.sh**: Node.js app deployment and service configuration
-7. **70-monitoring.sh**: Health checks, recovery, and remote access
+**Setup phases:**
+1. System package updates and base package installation
+2. Display stack installation (X11, Chromium, drivers)
+3. Font installation (Inter, CaskaydiaCove Nerd Font)
+4. Kiosk user creation and auto-login configuration
+5. Node.js and application deployment
+6. Boot optimization and Plymouth splash screen
+7. Tailscale VPN setup (optional)
+8. System finalization
 
 ## Testing Validation
 

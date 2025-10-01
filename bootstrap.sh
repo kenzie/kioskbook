@@ -153,12 +153,16 @@ EOF
     echo "Please set the root password:"
     passwd
     
+    # Install packages needed for disk setup
+    log "Installing disk setup packages..."
+    apk add e2fsprogs syslinux mtools util-linux 2>/dev/null || log_warning "Some disk packages may be missing"
+    
     # Now install to disk using setup-disk directly
     log "Installing Alpine to disk..."
     
     # Try setup-disk with verbose output
-    log "Running: setup-disk -m sys -L $TARGET_DISK"
-    if setup-disk -m sys -L $TARGET_DISK; then
+    log "Running: setup-disk -m sys $TARGET_DISK"
+    if setup-disk -m sys $TARGET_DISK; then
         log_success "Disk installation completed"
     else
         log_warning "setup-disk failed, trying manual approach..."

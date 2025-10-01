@@ -26,7 +26,17 @@ HOSTNAME="kioskbook"
 log() { printf "${CYAN}[BOOTSTRAP]${NC} %s\n" "$1"; }
 log_success() { printf "${GREEN}[SUCCESS]${NC} %s\n" "$1"; }
 log_warning() { printf "${YELLOW}[WARNING]${NC} %s\n" "$1"; }
-log_error() { printf "${RED}[ERROR]${NC} %s\n" "$1"; exit 1; }
+log_error() { printf "${RED}[ERROR]${NC} %s\n" "$1"; }
+
+# Forward declaration for cleanup
+cleanup() { :; }
+
+# Error handler with cleanup
+error_exit() {
+    log_error "$1"
+    cleanup
+    exit 1
+}
 
 # Banner
 show_banner() {
@@ -44,12 +54,12 @@ check_prerequisites() {
     
     # Check if running as root
     if [ "$(id -u)" != "0" ]; then
-        log_error "This script must be run as root"
+        error_exit "This script must be run as root"
     fi
     
     # Check if running from live environment
     if [ -d "/mnt/sda1" ]; then
-        log_error "System appears to be already installed. Run from Alpine Live USB."
+        error_exit "System appears to be already installed. Run from Alpine Live USB."
     fi
     
     # Check network
@@ -59,7 +69,7 @@ check_prerequisites() {
         rc-service networking restart
         sleep 2
         if ! ping -c 1 8.8.8.8 >/dev/null 2>&1; then
-            log_error "Network setup failed. Please configure manually."
+            error_exit "Network setup failed. Please configure manually."
         fi
     fi
     
@@ -72,23 +82,49 @@ partition_disk() {
     
     # Check if disk exists
     if [ ! -b "$TARGET_DISK" ]; then
-        log_error "Disk $TARGET_DISK not found"
+        error_exit "Disk $TARGET_DISK not found"
     fi
+    
+    # Unmount any existing partitions on target disk
+    log "Unmounting any existing partitions..."
+    for partition in ${TARGET_DISK}*; do
+        if [ -b "$partition" ] && mount | grep -q "$partition"; then
+            log "Unmounting $partition..."
+            umount -f "$partition" 2>/dev/null || true
+        fi
+    done
+    
+    # Also unmount if mounted at standard locations
+    umount -f /mnt 2>/dev/null || true
+    umount -f /mnt/dev 2>/dev/null || true
+    umount -f /mnt/proc 2>/dev/null || true
+    umount -f /mnt/sys 2>/dev/null || true
+    
+    # Deactivate any LVM/RAID if present
+    vgchange -an 2>/dev/null || true
+    mdadm --stop --scan 2>/dev/null || true
     
     # Confirm disk wipe
     echo -e "\n${YELLOW}WARNING: This will ERASE ALL DATA on $TARGET_DISK${NC}"
     echo -n "Continue? [y/N]: "
     read CONFIRM
     if [ "$CONFIRM" != "y" ]; then
-        log_error "Aborted by user"
+        error_exit "Aborted by user"
     fi
     
     # Wipe and partition
     log "Creating partition table..."
+    dd if=/dev/zero of=$TARGET_DISK bs=1M count=10 2>/dev/null
     wipefs -af $TARGET_DISK
+    partprobe $TARGET_DISK 2>/dev/null || true
+    
     parted -s $TARGET_DISK mklabel msdos
     parted -s $TARGET_DISK mkpart primary ext4 1MiB 100%
     parted -s $TARGET_DISK set 1 boot on
+    
+    # Let kernel re-read partition table
+    partprobe $TARGET_DISK 2>/dev/null || true
+    sleep 1
     
     # Format
     log "Formatting partition..."
@@ -208,15 +244,18 @@ EOF
     log_success "Base system configured"
 }
 
-# Cleanup
+# Cleanup (override forward declaration)
 cleanup() {
     log "Cleaning up..."
     
-    # Unmount filesystems
-    umount $MOUNT_ROOT/dev 2>/dev/null || true
-    umount $MOUNT_ROOT/proc 2>/dev/null || true
-    umount $MOUNT_ROOT/sys 2>/dev/null || true
-    umount $MOUNT_ROOT 2>/dev/null || true
+    # Kill any processes using the mount
+    fuser -km $MOUNT_ROOT 2>/dev/null || true
+    
+    # Unmount filesystems in reverse order
+    umount -f $MOUNT_ROOT/dev 2>/dev/null || true
+    umount -f $MOUNT_ROOT/proc 2>/dev/null || true  
+    umount -f $MOUNT_ROOT/sys 2>/dev/null || true
+    umount -f $MOUNT_ROOT 2>/dev/null || true
     
     log_success "Cleanup complete"
 }

@@ -309,19 +309,35 @@ EOF
 configure_silent_boot() {
     log "Configuring silent boot..."
     
-    # Configure GRUB for silent boot
-    sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet loglevel=3 systemd.show_status=false"/' /etc/default/grub
+    # Enhanced GRUB configuration for completely silent boot
+    sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=0 console=tty3 rd.systemd.show_status=false rd.udev.log_level=3 systemd.show_status=false"/' /etc/default/grub
     sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=0/' /etc/default/grub
+    echo "GRUB_TIMEOUT_STYLE=hidden" >> /etc/default/grub
+    echo "GRUB_TERMINAL=console" >> /etc/default/grub
     
     # Update GRUB
     update-grub
     
-    # Configure systemd for silent boot
+    # Enhanced systemd configuration for silent boot
     mkdir -p /etc/systemd/system.conf.d
     cat > /etc/systemd/system.conf.d/silent.conf << EOF
 [Manager]
 ShowStatus=no
 LogLevel=warning
+SystemCallErrorNumber=EPERM
+EOF
+    
+    # Create kernel parameters for completely silent boot
+    mkdir -p /etc/modprobe.d
+    cat > /etc/modprobe.d/silent.conf << 'EOF'
+# Suppress most kernel messages
+options drm_kms_helper poll=0
+options drm debug=0
+EOF
+    
+    # Hide kernel messages on all consoles
+    cat > /etc/sysctl.d/20-quiet-printk.conf << 'EOF'
+kernel.printk = 3 3 3 3
 EOF
     
     # Disable unnecessary services for faster boot
@@ -332,8 +348,28 @@ EOF
         ModemManager.service \
         wpa_supplicant.service 2>/dev/null || true
     
-    # Mask Plymouth to prevent delays
-    systemctl mask plymouth-quit-wait.service 2>/dev/null || true
+    # Mask services that show boot messages
+    systemctl mask \
+        plymouth-quit-wait.service \
+        systemd-random-seed.service \
+        systemd-update-utmp.service \
+        systemd-tmpfiles-setup.service \
+        e2scrub_reap.service 2>/dev/null || true
+    
+    # Create custom getty service to auto-login without messages
+    mkdir -p /etc/systemd/system/getty@tty1.service.d
+    cat > /etc/systemd/system/getty@tty1.service.d/override.conf << 'EOF'
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin kiosk --noclear %I $TERM
+StandardInput=tty
+StandardOutput=tty
+Environment=TERM=linux
+TTYVTDisallocate=no
+EOF
+    
+    # Reload systemd
+    systemctl daemon-reload
     
     log_success "Silent boot configured"
 }
@@ -416,6 +452,15 @@ EOF
     log_success "System optimized"
 }
 
+# Install management CLI
+install_management_cli() {
+    log "Installing KioskBook management CLI..."
+    
+    # Note: Bootstrap runs during initial installation before git repo is available
+    # Management CLI will be installed later via update script from local repo
+    log_warning "Management CLI will be available after running 'update.sh' from cloned repository"
+}
+
 # Show completion
 show_completion() {
     echo -e "\n${GREEN}═══════════════════════════════════════════════════════${NC}"
@@ -461,6 +506,7 @@ main() {
     configure_silent_boot
     install_tailscale
     optimize_system
+    install_management_cli
     show_completion
 }
 

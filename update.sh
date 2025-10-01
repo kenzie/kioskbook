@@ -546,6 +546,94 @@ EOF
     log_success "Automatic recovery enabled"
 }
 
+# Enhanced silent boot configuration (idempotent)
+enhance_silent_boot() {
+    log "Enhancing silent boot configuration..."
+    
+    # Enhanced GRUB configuration for completely silent boot
+    local updated=false
+    
+    # Update GRUB defaults for silent boot
+    if ! grep -q "quiet splash loglevel=0" /etc/default/grub; then
+        sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=0 console=tty3 rd.systemd.show_status=false rd.udev.log_level=3 systemd.show_status=false"/' /etc/default/grub
+        updated=true
+    fi
+    
+    # Set GRUB timeout to 0
+    if ! grep -q "^GRUB_TIMEOUT=0" /etc/default/grub; then
+        sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=0/' /etc/default/grub
+        updated=true
+    fi
+    
+    # Hide GRUB menu completely
+    if ! grep -q "^GRUB_TIMEOUT_STYLE=hidden" /etc/default/grub; then
+        echo "GRUB_TIMEOUT_STYLE=hidden" >> /etc/default/grub
+        updated=true
+    fi
+    
+    # Disable GRUB graphics for faster boot
+    if ! grep -q "^GRUB_TERMINAL=console" /etc/default/grub; then
+        echo "GRUB_TERMINAL=console" >> /etc/default/grub
+        updated=true
+    fi
+    
+    if [[ "$updated" == true ]]; then
+        update-grub
+        log "GRUB configuration updated"
+    fi
+    
+    # Enhanced systemd configuration for silent boot
+    mkdir -p /etc/systemd/system.conf.d
+    cat > /etc/systemd/system.conf.d/silent.conf << 'EOF'
+[Manager]
+ShowStatus=no
+LogLevel=warning
+SystemCallErrorNumber=EPERM
+EOF
+    
+    # Create kernel parameters for completely silent boot
+    mkdir -p /etc/modprobe.d
+    cat > /etc/modprobe.d/silent.conf << 'EOF'
+# Suppress most kernel messages
+options drm_kms_helper poll=0
+options drm debug=0
+EOF
+    
+    # Hide kernel messages on all consoles
+    cat > /etc/sysctl.d/20-quiet-printk.conf << 'EOF'
+kernel.printk = 3 3 3 3
+EOF
+    
+    # Disable verbose fsck during boot
+    if [[ -f /etc/default/rcS ]]; then
+        sed -i 's/^#FSCKFIX=.*/FSCKFIX=yes/' /etc/default/rcS
+    fi
+    
+    # Mask services that show boot messages
+    systemctl mask \
+        systemd-random-seed.service \
+        systemd-update-utmp.service \
+        systemd-tmpfiles-setup.service \
+        e2scrub_reap.service 2>/dev/null || true
+    
+    # Create custom getty service to auto-login without messages
+    mkdir -p /etc/systemd/system/getty@tty1.service.d
+    cat > /etc/systemd/system/getty@tty1.service.d/override.conf << 'EOF'
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin kiosk --noclear %I $TERM
+StandardInput=tty
+StandardOutput=tty
+Environment=TERM=linux
+TTYVTDisallocate=no
+EOF
+    
+    # Reload systemd
+    systemctl daemon-reload
+    
+    log_success "Silent boot enhanced"
+}
+
 # Show completion
 show_completion() {
     echo -e "\n${GREEN}═══════════════════════════════════════════════════════${NC}"
@@ -565,6 +653,7 @@ show_completion() {
     echo -e "  ✅ Scheduled maintenance configured"
     echo -e "  ✅ System optimization applied"
     echo -e "  ✅ Automatic recovery enabled"
+    echo -e "  ✅ Silent boot enhanced (completely silent)"
     
     echo -e "\n${CYAN}New Features:${NC}"
     echo -e "  🚀 Management CLI: ${YELLOW}kiosk status${NC}, ${YELLOW}kiosk health${NC}, ${YELLOW}kiosk logs${NC}"
@@ -605,6 +694,7 @@ main() {
     setup_scheduled_maintenance
     setup_system_optimization
     setup_automatic_recovery
+    enhance_silent_boot
     restart_kiosk_session
     show_completion
 }

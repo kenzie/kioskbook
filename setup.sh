@@ -411,18 +411,61 @@ configure_silent_boot() {
 
 # Optimize boot
 optimize_boot() {
-    log "Optimizing boot sequence..."
+    log "Optimizing boot sequence for fast kiosk startup..."
     
-    # Disable unnecessary services
+    # Disable services that slow down boot
     rc-update del acpid default 2>/dev/null || true
     rc-update del crond default 2>/dev/null || true
     
-    # Configure kernel parameters for faster boot
-    if [ -f /boot/extlinux.conf ]; then
-        sed -i 's/APPEND.*/& quiet loglevel=3/' /boot/extlinux.conf
+    # Move network services to start after kiosk display (faster boot to display)
+    rc-update del networking default 2>/dev/null || true
+    rc-update del sshd default 2>/dev/null || true
+    
+    # Create delayed network services that start after kiosk display
+    cat > /etc/init.d/network-services << 'EOF'
+#!/sbin/openrc-run
+
+name="Network Services (Delayed)"
+description="Start networking and SSH after kiosk display is up"
+
+depend() {
+    after kiosk-app
+}
+
+start() {
+    ebegin "Starting delayed networking"
+    /etc/init.d/networking start
+    eend $? || return 1
+    
+    # Wait for network to be ready
+    sleep 2
+    
+    ebegin "Starting delayed SSH daemon"
+    /etc/init.d/sshd start
+    eend $?
+}
+
+stop() {
+    ebegin "Stopping network services"
+    /etc/init.d/sshd stop
+    /etc/init.d/networking stop
+    eend $?
+}
+EOF
+    chmod +x /etc/init.d/network-services
+    rc-update add network-services default
+    
+    # Pre-generate SSH host keys to avoid first-boot delay
+    log "Pre-generating SSH host keys..."
+    ssh-keygen -A
+    
+    # Optimize SSH configuration for faster startup
+    if [ -f /etc/ssh/sshd_config ]; then
+        echo "UseDNS no" >> /etc/ssh/sshd_config
+        echo "GSSAPIAuthentication no" >> /etc/ssh/sshd_config
     fi
     
-    log_success "Boot optimized"
+    log_success "Boot optimized - network and SSH will start after kiosk display"
 }
 
 # Install Tailscale (if key provided)

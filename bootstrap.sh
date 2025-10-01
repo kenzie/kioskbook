@@ -225,17 +225,68 @@ post_install() {
     mkdir -p /mnt/target
     mount ${TARGET_DISK}1 /mnt/target 2>/dev/null || mount ${TARGET_DISK}2 /mnt/target
     
-    # Copy setup.sh if it exists
-    if [ -f "setup.sh" ]; then
+    # Configure networking for installed system
+    log "Setting up networking in installed system..."
+    cat > /mnt/target/etc/network/interfaces << 'EOF'
+auto lo
+iface lo inet loopback
+
+auto eth0
+iface eth0 inet dhcp
+EOF
+    
+    # Ensure networking service is enabled
+    mkdir -p /mnt/target/etc/runlevels/boot
+    ln -sf /etc/init.d/networking /mnt/target/etc/runlevels/boot/networking 2>/dev/null || true
+    
+    # Copy DNS settings from live system
+    if [ -f /etc/resolv.conf ]; then
+        cp /etc/resolv.conf /mnt/target/etc/ || log_warning "Failed to copy DNS settings"
+    fi
+    
+    # Copy APK repositories
+    if [ -f /etc/apk/repositories ]; then
+        mkdir -p /mnt/target/etc/apk
+        cp /etc/apk/repositories /mnt/target/etc/apk/ || log_warning "Failed to copy repositories"
+    fi
+    
+    # Download setup.sh directly to the installed system
+    log "Downloading setup.sh to installed system..."
+    if command -v wget >/dev/null; then
+        wget -q -O /mnt/target/root/setup.sh https://raw.githubusercontent.com/kenzie/kioskbook/main/setup.sh || log_warning "Failed to download setup.sh"
+        chmod +x /mnt/target/root/setup.sh 2>/dev/null || true
+    elif [ -f "setup.sh" ]; then
         cp setup.sh /mnt/target/root/
         chmod +x /mnt/target/root/setup.sh
-        log_success "Copied setup.sh to /root/"
+        log_success "Copied local setup.sh to /root/"
     else
-        log_warning "setup.sh not found in current directory"
+        log_warning "setup.sh not available - will need to download manually after boot"
     fi
     
     # Create setup marker
     touch /mnt/target/root/.needs_kiosk_setup
+    
+    # Create a simple network test script
+    cat > /mnt/target/root/test-network.sh << 'EOF'
+#!/bin/sh
+echo "Testing network connectivity..."
+if ping -c 1 8.8.8.8 >/dev/null 2>&1; then
+    echo "✓ Network is working"
+    echo "✓ You can run: ./setup.sh"
+else
+    echo "✗ Network not working, trying to restart..."
+    /etc/init.d/networking restart
+    sleep 2
+    if ping -c 1 8.8.8.8 >/dev/null 2>&1; then
+        echo "✓ Network is now working"
+        echo "✓ You can run: ./setup.sh"
+    else
+        echo "✗ Network still not working"
+        echo "Try: /etc/init.d/networking restart"
+    fi
+fi
+EOF
+    chmod +x /mnt/target/root/test-network.sh
     
     # Ensure kernel parameters for quiet boot
     if [ -f /mnt/target/etc/update-extlinux.conf ]; then

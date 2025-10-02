@@ -67,6 +67,16 @@ if ! grep -q "^GRUB_GFXPAYLOAD_LINUX=keep" /etc/default/grub; then
     updated=true
 fi
 
+if ! grep -q "^GRUB_COLOR_NORMAL=" /etc/default/grub; then
+    echo 'GRUB_COLOR_NORMAL="black/black"' >> /etc/default/grub
+    updated=true
+fi
+
+if ! grep -q "^GRUB_COLOR_HIGHLIGHT=" /etc/default/grub; then
+    echo 'GRUB_COLOR_HIGHLIGHT="black/black"' >> /etc/default/grub
+    updated=true
+fi
+
 if ! grep -q "^GRUB_TERMINAL=" /etc/default/grub; then
     sed -i 's/^GRUB_TERMINAL=.*//' /etc/default/grub
     echo "GRUB_TERMINAL=" >> /etc/default/grub

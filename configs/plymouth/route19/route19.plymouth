@@ -6,3 +6,6 @@ ModuleName=script
 [script]
 ImageDir=/usr/share/plymouth/themes/route19
 ScriptFile=/usr/share/plymouth/themes/route19/route19.script
+
+[boot-up]
+MinimumDuration=3

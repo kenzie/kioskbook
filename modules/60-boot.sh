@@ -27,7 +27,9 @@ log_module "$module_name" "Configuring GRUB..."
 plymouth_updated=false
 
 # Update GRUB defaults for Plymouth (requires 'splash' parameter and loglevel=0)
-if ! grep -q "loglevel=0.*splash" /etc/default/grub; then
+# Check if both splash and loglevel=0 are present (order doesn't matter)
+current_params=$(grep "^GRUB_CMDLINE_LINUX_DEFAULT" /etc/default/grub || echo "")
+if ! echo "$current_params" | grep -q "splash" || ! echo "$current_params" | grep -q "loglevel=0"; then
     sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=0 systemd.show_status=false rd.udev.log_level=0 vt.global_cursor_default=0 console=tty3 amdgpu.hdcp=0 amdgpu.tmz=0 amdgpu.sg_display=0 amdgpu.gpu_recovery=1 amdgpu.noretry=0"/' /etc/default/grub
     plymouth_updated=true
 fi

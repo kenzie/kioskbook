@@ -3,22 +3,26 @@
 # Common functions and variables for KioskBook modules
 #
 
-# Colors for output
-readonly RED='\033[0;31m'
-readonly GREEN='\033[0;32m'
-readonly YELLOW='\033[1;33m'
-readonly CYAN='\033[0;36m'
-readonly BLUE='\033[0;34m'
-readonly MAGENTA='\033[0;35m'
-readonly NC='\033[0m'
+# Colors for output (only define if not already set)
+if [[ -z "${RED:-}" ]]; then
+    readonly RED='\033[0;31m'
+    readonly GREEN='\033[0;32m'
+    readonly YELLOW='\033[1;33m'
+    readonly CYAN='\033[0;36m'
+    readonly BLUE='\033[0;34m'
+    readonly MAGENTA='\033[0;35m'
+    readonly NC='\033[0m'
+fi
 
-# Common configuration
-readonly KIOSK_USER="kiosk"
-readonly KIOSK_HOME="/home/kiosk"
-readonly APP_DIR="/opt/kioskbook"
-readonly REPO_DIR="/opt/kioskbook-repo"
-readonly LOG_DIR="/var/log/kioskbook"
-readonly DEFAULT_GITHUB_REPO="https://github.com/kenzie/lobby-display"
+# Common configuration (only define if not already set)
+if [[ -z "${KIOSK_USER:-}" ]]; then
+    readonly KIOSK_USER="kiosk"
+    readonly KIOSK_HOME="/home/kiosk"
+    readonly APP_DIR="/opt/kioskbook"
+    readonly REPO_DIR="/opt/kioskbook-repo"
+    readonly LOG_DIR="/var/log/kioskbook"
+    readonly DEFAULT_GITHUB_REPO="https://github.com/kenzie/lobby-display"
+fi
 
 # Logging functions
 log() {

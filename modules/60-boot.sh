@@ -18,9 +18,9 @@ log_module "$module_name" "Starting silent boot configuration..."
 log_module "$module_name" "Configuring GRUB..."
 updated=false
 
-# Update GRUB defaults for true silence
-if ! grep -q "vt.global_cursor_default=0" /etc/default/grub; then
-    sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet loglevel=0 systemd.show_status=false rd.udev.log_level=0 vt.global_cursor_default=0 console=tty3 amdgpu.hdcp=0 amdgpu.tmz=0 amdgpu.sg_display=0 amdgpu.gpu_recovery=1 amdgpu.noretry=0"/' /etc/default/grub
+# Update GRUB defaults for silent boot with branded message
+if ! grep -q "amdgpu.gpu_recovery=1" /etc/default/grub; then
+    sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet loglevel=0 systemd.show_status=false rd.udev.log_level=0 console=tty3 amdgpu.hdcp=0 amdgpu.tmz=0 amdgpu.sg_display=0 amdgpu.gpu_recovery=1 amdgpu.noretry=0"/' /etc/default/grub
     updated=true
 fi
 
@@ -73,29 +73,28 @@ if ! grep -q "^GRUB_GFXMODE=text" /etc/default/grub; then
     updated=true
 fi
 
-# Permanently suppress "Loading Linux..." and "Loading initial ramdisk..." messages
-# by commenting out the printf/echo lines in /etc/grub.d/10_linux
-log_module "$module_name" "Patching GRUB boot messages..."
+# Replace GRUB boot messages with branded KioskBook message
+log_module "$module_name" "Branding GRUB boot messages..."
 if [[ -f /etc/grub.d/10_linux ]]; then
-    # Comment out lines containing "Loading Linux" messages
-    if grep -q "Loading Linux" /etc/grub.d/10_linux; then
-        sed -i '/Loading Linux/s/^/# KIOSKBOOK-SILENCED: /' /etc/grub.d/10_linux
+    # Replace "Loading Linux" with branded message
+    if grep -q "Loading Linux" /etc/grub.d/10_linux && ! grep -q "Starting up KioskBook" /etc/grub.d/10_linux; then
+        sed -i 's/Loading Linux.*/Starting up KioskBook by Route 19.../' /etc/grub.d/10_linux
         updated=true
     fi
-    # Comment out lines containing "Loading initial ramdisk" messages
-    if grep -q "Loading initial ramdisk" /etc/grub.d/10_linux; then
+    # Comment out "Loading initial ramdisk" message
+    if grep -q "Loading initial ramdisk" /etc/grub.d/10_linux && ! grep -q "# KIOSKBOOK-SILENCED.*Loading initial ramdisk" /etc/grub.d/10_linux; then
         sed -i '/Loading initial ramdisk/s/^/# KIOSKBOOK-SILENCED: /' /etc/grub.d/10_linux
         updated=true
     fi
 fi
 
-# Also check 20_linux_xen if it exists
+# Also brand 20_linux_xen if it exists
 if [[ -f /etc/grub.d/20_linux_xen ]]; then
-    if grep -q "Loading Linux" /etc/grub.d/20_linux_xen; then
-        sed -i '/Loading Linux/s/^/# KIOSKBOOK-SILENCED: /' /etc/grub.d/20_linux_xen
+    if grep -q "Loading Linux" /etc/grub.d/20_linux_xen && ! grep -q "Starting up KioskBook" /etc/grub.d/20_linux_xen; then
+        sed -i 's/Loading Linux.*/Starting up KioskBook by Route 19.../' /etc/grub.d/20_linux_xen
         updated=true
     fi
-    if grep -q "Loading initial ramdisk" /etc/grub.d/20_linux_xen; then
+    if grep -q "Loading initial ramdisk" /etc/grub.d/20_linux_xen && ! grep -q "# KIOSKBOOK-SILENCED.*Loading initial ramdisk" /etc/grub.d/20_linux_xen; then
         sed -i '/Loading initial ramdisk/s/^/# KIOSKBOOK-SILENCED: /' /etc/grub.d/20_linux_xen
         updated=true
     fi

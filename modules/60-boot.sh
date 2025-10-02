@@ -115,16 +115,15 @@ if [[ -f "$theme_file" ]]; then
     log_module "$module_name" "Route 19 theme activated"
 fi
 
-# Update GRUB and initramfs if Plymouth config changed
-if [[ "$plymouth_updated" == true ]]; then
-    log_module "$module_name" "Updating GRUB..."
-    update-grub
+# Always update GRUB and initramfs to ensure changes are applied
+# (needed because theme files might be updated even if checks pass)
+log_module "$module_name" "Updating GRUB..."
+update-grub
 
-    log_module "$module_name" "Updating initramfs (this may take a minute)..."
-    update-initramfs -u
+log_module "$module_name" "Updating initramfs (this may take a minute)..."
+update-initramfs -u
 
-    log_module "$module_name" "Plymouth configuration updated"
-fi
+log_module "$module_name" "Plymouth configuration updated"
 
 # Configure systemd for silent boot
 log_module "$module_name" "Configuring systemd..."

@@ -7,7 +7,11 @@ echo
 
 # Check application service
 echo "Application Service:"
-systemctl is-active kioskbook-app || echo "❌ Application not running"
+if systemctl is-active kioskbook-app >/dev/null 2>&1; then
+    echo "✅ Active"
+else
+    echo "❌ Application not running"
+fi
 
 # Check display
 echo "Display:"

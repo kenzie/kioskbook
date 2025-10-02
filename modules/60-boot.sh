@@ -89,6 +89,19 @@ if ! grep -q "^GRUB_GFXPAYLOAD_LINUX=keep" /etc/default/grub; then
     plymouth_updated=true
 fi
 
+# Install Route 19 logo as GRUB background for seamless boot
+log_module "$module_name" "Installing Route 19 GRUB background..."
+mkdir -p /boot/grub
+cp "$SCRIPT_DIR/assets/route19-logo.png" /boot/grub/route19-logo.png
+
+if ! grep -q "^GRUB_BACKGROUND=" /etc/default/grub; then
+    echo 'GRUB_BACKGROUND="/boot/grub/route19-logo.png"' >> /etc/default/grub
+    plymouth_updated=true
+elif ! grep -q 'GRUB_BACKGROUND="/boot/grub/route19-logo.png"' /etc/default/grub; then
+    sed -i 's|^GRUB_BACKGROUND=.*|GRUB_BACKGROUND="/boot/grub/route19-logo.png"|' /etc/default/grub
+    plymouth_updated=true
+fi
+
 # Install Route 19 Plymouth theme
 log_module "$module_name" "Installing Route 19 Plymouth theme..."
 theme_dir="/usr/share/plymouth/themes/route19"

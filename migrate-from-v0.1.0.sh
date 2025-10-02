@@ -132,6 +132,20 @@ install_kiosk_cli() {
     log_success "kiosk CLI installed to /usr/local/bin/kiosk"
 }
 
+# Ensure kiosk user has sudo access
+ensure_kiosk_sudo() {
+    log "Ensuring kiosk user has sudo access..."
+
+    if ! groups kiosk | grep -q sudo; then
+        usermod -aG sudo kiosk
+        log "Added kiosk to sudo group"
+    else
+        log "Kiosk user already in sudo group"
+    fi
+
+    log_success "Kiosk user sudo access configured"
+}
+
 # Update configurations (idempotent)
 update_configurations() {
     log "Updating system configurations..."
@@ -274,6 +288,7 @@ main() {
     backup_configuration
     clone_modular_repo
     install_kiosk_cli
+    ensure_kiosk_sudo
     update_configurations
     install_monitoring
     update_grub_config

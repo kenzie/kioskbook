@@ -4,8 +4,8 @@
 SCREENSAVER_PATH="file:///opt/kioskbook-repo/configs/screensaver/screensaver.html"
 DEBUG_PORT=9222
 
-# Get the first tab/page ID
-PAGE_ID=$(curl -s http://localhost:${DEBUG_PORT}/json | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+# Get the first tab/page ID (accounting for spaces in JSON)
+PAGE_ID=$(curl -s http://localhost:${DEBUG_PORT}/json | grep -oP '"id":\s*"\K[^"]+' | head -1)
 
 if [[ -n "$PAGE_ID" ]]; then
     # Open new tab with screensaver (use PUT)

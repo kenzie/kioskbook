@@ -127,6 +127,8 @@ theme_dir="/usr/share/plymouth/themes/route19"
 if [[ ! -d "$theme_dir" ]] || [[ ! -f "$theme_dir/route19.plymouth" ]]; then
     mkdir -p "$theme_dir"
     cp -r "$SCRIPT_DIR/configs/plymouth/route19/"* "$theme_dir/"
+    # Copy team logo (placeholder is route19 logo for now, replace later)
+    cp "$SCRIPT_DIR/assets/team-logo.png" "$theme_dir/"
     plymouth_updated=true
     log_module "$module_name" "Route 19 theme installed"
 fi

@@ -1,12 +1,12 @@
 // Route 19 Plymouth Theme Script
-// Displays Route 19 logo centered on black background
+// Displays team logo centered on black background
 
 // Set background to pure black
 Window.SetBackgroundTopColor(0, 0, 0);
 Window.SetBackgroundBottomColor(0, 0, 0);
 
-// Load and display logo
-logo.image = Image("route19-logo.png");
+// Load and display team logo
+logo.image = Image("team-logo.png");
 logo.sprite = Sprite(logo.image);
 
 // Center the logo

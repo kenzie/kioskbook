@@ -349,38 +349,36 @@ cmd_monitor() {
 
 # Show help
 cmd_help() {
-    cat << EOF
-${CYAN}KioskBook Management CLI${NC}
-
-${YELLOW}Usage:${NC}
-  kiosk <command> [options]
-
-${YELLOW}Commands:${NC}
-  ${GREEN}version${NC}              Show installed version
-  ${GREEN}status${NC}               Show system status
-  ${GREEN}health${NC} [--detailed] Run health check
-  ${GREEN}logs${NC} [-f] [-n NUM]  View application logs
-  ${GREEN}modules${NC}              List available modules
-  ${GREEN}update${NC} <module|all> Update specific module or all
-  ${GREEN}restart${NC} [service]    Restart services (app|display|all)
-  ${GREEN}maintenance${NC}          Run maintenance tasks
-  ${GREEN}monitor${NC}              Run monitoring check
-  ${GREEN}help${NC}                 Show this help message
-
-${YELLOW}Examples:${NC}
-  kiosk status
-  kiosk health --detailed
-  kiosk logs -f
-  kiosk update 30-display
-  kiosk update all
-  kiosk restart app
-  kiosk maintenance
-
-${YELLOW}Version Management:${NC}
-  Use ${GREEN}kiosk version${NC} to check for updates
-  Use ${GREEN}kiosk update all${NC} to update to latest version
-
-EOF
+    echo -e "${CYAN}KioskBook Management CLI${NC}"
+    echo ""
+    echo -e "${YELLOW}Usage:${NC}"
+    echo "  kiosk <command> [options]"
+    echo ""
+    echo -e "${YELLOW}Commands:${NC}"
+    echo -e "  ${GREEN}version${NC}              Show installed version"
+    echo -e "  ${GREEN}status${NC}               Show system status"
+    echo -e "  ${GREEN}health${NC} [--detailed] Run health check"
+    echo -e "  ${GREEN}logs${NC} [-f] [-n NUM]  View application logs"
+    echo -e "  ${GREEN}modules${NC}              List available modules"
+    echo -e "  ${GREEN}update${NC} <module|all> Update specific module or all"
+    echo -e "  ${GREEN}restart${NC} [service]    Restart services (app|display|all)"
+    echo -e "  ${GREEN}maintenance${NC}          Run maintenance tasks"
+    echo -e "  ${GREEN}monitor${NC}              Run monitoring check"
+    echo -e "  ${GREEN}help${NC}                 Show this help message"
+    echo ""
+    echo -e "${YELLOW}Examples:${NC}"
+    echo "  kiosk status"
+    echo "  kiosk health --detailed"
+    echo "  kiosk logs -f"
+    echo "  kiosk update 30-display"
+    echo "  kiosk update all"
+    echo "  kiosk restart app"
+    echo "  kiosk maintenance"
+    echo ""
+    echo -e "${YELLOW}Version Management:${NC}"
+    echo -e "  Use ${GREEN}kiosk version${NC} to check for updates"
+    echo -e "  Use ${GREEN}kiosk update all${NC} to update to latest version"
+    echo ""
 }
 
 # Main command dispatcher

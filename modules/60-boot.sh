@@ -20,7 +20,7 @@ updated=false
 
 # Update GRUB defaults
 if ! grep -q "quiet splash loglevel=0" /etc/default/grub; then
-    sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=0 console=tty3 rd.systemd.show_status=false rd.udev.log_level=3 systemd.show_status=false"/' /etc/default/grub
+    sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=0 console=tty3 rd.systemd.show_status=false rd.udev.log_level=3 systemd.show_status=false amdgpu.hdcp=0 amdgpu.tmz=0 amdgpu.sg_display=0 amdgpu.gpu_recovery=1 amdgpu.noretry=0"/' /etc/default/grub
     updated=true
 fi
 
@@ -59,6 +59,11 @@ if ! grep -q "^GRUB_GFXMODE=text" /etc/default/grub; then
     updated=true
 fi
 
+if ! grep -q "^GRUB_GFXPAYLOAD_LINUX=keep" /etc/default/grub; then
+    echo "GRUB_GFXPAYLOAD_LINUX=keep" >> /etc/default/grub
+    updated=true
+fi
+
 if ! grep -q "^GRUB_TERMINAL=" /etc/default/grub; then
     sed -i 's/^GRUB_TERMINAL=.*//' /etc/default/grub
     echo "GRUB_TERMINAL=" >> /etc/default/grub
@@ -79,6 +84,10 @@ cp "$SCRIPT_DIR/configs/systemd/silent.conf" /etc/systemd/system.conf.d/silent.c
 log_module "$module_name" "Configuring kernel parameters..."
 mkdir -p /etc/modprobe.d
 cp "$SCRIPT_DIR/configs/grub/modprobe-silent.conf" /etc/modprobe.d/silent.conf
+
+# Update initramfs to apply modprobe changes
+log_module "$module_name" "Updating initramfs..."
+update-initramfs -u
 
 # Hide kernel messages
 mkdir -p /etc/sysctl.d

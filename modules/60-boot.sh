@@ -135,6 +135,11 @@ log_module "$module_name" "Configuring kernel parameters..."
 mkdir -p /etc/modprobe.d
 cp "$SCRIPT_DIR/configs/grub/modprobe-silent.conf" /etc/modprobe.d/silent.conf
 
+# Enable early KMS for AMD GPU (required for Plymouth graphics)
+log_module "$module_name" "Enabling early KMS for AMD GPU..."
+mkdir -p /etc/initramfs-tools/modules.d
+cp "$SCRIPT_DIR/configs/initramfs/modules" /etc/initramfs-tools/modules.d/kioskbook.conf
+
 # Hide kernel messages
 mkdir -p /etc/sysctl.d
 cp "$SCRIPT_DIR/configs/grub/sysctl-quiet.conf" /etc/sysctl.d/20-quiet-printk.conf

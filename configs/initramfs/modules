@@ -1,0 +1,2 @@
+# Load AMD GPU driver early for Plymouth
+amdgpu

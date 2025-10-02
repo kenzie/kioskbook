@@ -2,58 +2,136 @@
 
 Bulletproof kiosk deployment platform for Debian Linux. Transform any AMD-based system into a fast-booting (<5 seconds), self-recovering kiosk running Vue.js applications with professional-grade reliability.
 
+**Version 0.2.0** - Modular architecture with automated monitoring and recovery
+
 ## Features
 
-- **🚀 Ultra-Fast Boot** - Sub-5 second boot to Chromium display
-- **📦 Debian Base** - Minimal, stable, and reliable foundation  
-- **🔧 Simple Installation** - Single-script bootstrap from Debian netinst ISO
-- **🖥️ Professional Display** - X11 with AMD GPU acceleration and TearFree
+- **🚀 Ultra-Fast Boot** - Sub-5 second boot to Chromium display with silent GRUB
+- **📦 Debian 13 Base** - Minimal, stable, and reliable Trixie foundation
+- **🔧 Modular Installation** - Update individual components without full reinstall
+- **🖥️ Professional Display** - X11 + OpenBox with AMD GPU acceleration
 - **🌐 Remote Management** - Tailscale VPN integration for secure access
-- **📺 Optimized Kiosk** - Chromium with Inter fonts and CSS injection
-- **🛡️ Self-Recovering** - Comprehensive health monitoring and auto-recovery
+- **📺 Optimized Kiosk** - Chromium with Inter fonts and font rendering optimization
+- **🛡️ Self-Recovering** - Automated monitoring every 5 minutes with auto-recovery
 - **🎨 Premium Fonts** - Inter UI font and CaskaydiaCove Nerd Font
-- **📊 Content Sync** - Manifest-based content updates with atomic swaps
+- **📊 Automated Maintenance** - Daily/weekly scheduled updates and cleanups
+- **🛠️ kiosk CLI** - Powerful management tool for status, health, logs, and updates
+- **📝 Version Tracking** - Track installed version and available updates
 
-## Installation Guide
+## Quick Start
 
-### 1. Download Debian Netinst ISO
+### 1. Install Debian 13.1.0 (Trixie) Netinst
 
-Download the minimal Debian installer (300MB):
-- [Debian 12 netinst ISO](https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/)
-- Create bootable USB with dd, Rufus, or Balena Etcher
+Download and install minimal Debian:
+- [Debian 13 netinst ISO](https://cdimage.debian.org/cdimages/trixie_di_rc2/amd64/iso-cd/)
+- During installation: **SSH server only, no desktop environment**
+- Standard system utilities only
 
-### 2. Boot and Install Debian Minimal
+### 2. Install KioskBook
 
-Boot from USB and install minimal Debian:
-- **No desktop environment** 
-- **SSH server only**
-- **Standard system utilities**
-
-### 3. Run KioskBook Bootstrap
-
-After Debian installation and first boot:
+SSH into the freshly installed Debian system:
 
 ```bash
-# Download and run bootstrap
-wget -O bootstrap.sh https://raw.githubusercontent.com/kenzie/kioskbook/main/bootstrap.sh
-chmod +x bootstrap.sh
-sudo ./bootstrap.sh
+# Clone repository
+git clone https://github.com/kenzie/kioskbook.git
+cd kioskbook
+
+# Run installer
+sudo ./install.sh [github_repo] [tailscale_key]
+
+# Arguments (optional):
+#   github_repo    - Vue.js app repository (default: kenzie/lobby-display)
+#   tailscale_key  - Tailscale auth key for VPN access
 ```
 
-The bootstrap will:
-- Install X11, Chromium, and display drivers
-- Configure auto-login and kiosk user
-- Install Node.js and Vue.js application  
-- Set up silent boot and fast startup
-- Configure Tailscale VPN (optional)
+### 3. Reboot
 
-### 4. First Boot
+```bash
+sudo reboot
+```
 
-After bootstrap completes and reboot:
-- **Fast boot** - <5 seconds to display
-- **Auto-login** - Automatic kiosk user login
-- **Full-screen Chromium** - Vue.js application display
-- **Remote access** - SSH via Tailscale (if configured)
+System will:
+- Boot in <5 seconds (completely silent)
+- Auto-login as kiosk user
+- Launch Chromium in full-screen kiosk mode
+- Display your Vue.js application on port 5173
+
+## Management with kiosk CLI
+
+After installation, use the `kiosk` command for all management tasks:
+
+```bash
+# Check version
+kiosk version
+
+# Show system status
+kiosk status
+
+# Run health check
+kiosk health --detailed
+
+# View logs (real-time)
+kiosk logs -f
+
+# List available modules
+kiosk modules
+
+# Update specific module
+sudo kiosk update 30-display
+sudo kiosk update 70-services
+
+# Update everything
+sudo kiosk update all
+
+# Restart services
+sudo kiosk restart app       # Restart application
+sudo kiosk restart display   # Restart display manager
+sudo kiosk restart all       # Restart both
+
+# Run maintenance
+sudo kiosk maintenance
+```
+
+## Modular Architecture
+
+KioskBook v0.2.0 uses a modular architecture for easy maintenance and selective updates:
+
+```
+kioskbook/
+├── install.sh              # Main installer orchestrator
+├── modules/                # Installation modules (run in order)
+│   ├── 10-base.sh         # Base system packages
+│   ├── 20-network.sh      # SSH, Tailscale VPN
+│   ├── 30-display.sh      # X11, OpenBox, LightDM, Chromium
+│   ├── 40-fonts.sh        # Inter, CaskaydiaCove Nerd Font
+│   ├── 50-app.sh          # Node.js, application deployment
+│   ├── 60-boot.sh         # Silent GRUB boot
+│   └── 70-services.sh     # Monitoring, recovery, maintenance
+├── configs/                # All configuration files
+├── bin/kiosk              # Management CLI tool
+└── lib/common.sh          # Shared functions
+```
+
+### Module Development Workflow
+
+1. Make changes to a module in your local repo
+2. Test on live kiosk: `sudo bash modules/30-display.sh`
+3. Verify: `kiosk status && kiosk health`
+4. Commit and push when confirmed working
+5. Update production: `sudo kiosk update all`
+
+## Automated Features
+
+### Monitoring & Recovery
+- **Every 5 minutes**: Automated health checks
+- **Auto-recovery**: Restarts failed services automatically
+- **Logging**: All recovery actions logged to `/var/log/kioskbook/monitor.log`
+
+### Scheduled Maintenance
+- **Daily (3 AM)**: General maintenance
+- **Weekly (Sunday 2 AM)**: System updates
+- **Weekly (Sunday 4 AM)**: Service restarts after updates
+- **Daily (1 AM)**: Journal log cleanup (7-day retention)
 
 ## Hardware Requirements
 
@@ -61,7 +139,7 @@ After bootstrap completes and reboot:
 
 **Primary Target: Lenovo M75q-1 Tiny**
 - **CPU**: AMD Ryzen 5 PRO 3400GE (or similar AMD APU)
-- **RAM**: 8-16GB DDR4 (16GB recommended for video content)  
+- **RAM**: 8-16GB DDR4 (16GB recommended for video content)
 - **Storage**: 256GB+ NVMe SSD (M.2 2280)
 - **GPU**: AMD Radeon Vega 11 (integrated)
 - **Ports**: HDMI 2.0, USB 3.1, Ethernet
@@ -75,23 +153,77 @@ After bootstrap completes and reboot:
 - **Display**: HDMI 1.4 or higher
 - **Network**: Ethernet connection during installation
 
-## Development Status
+## Version History
 
-🚧 **Currently rebuilding on Debian foundation**
+### v0.2.0 (Current) - 2025-10-02
+- ✅ Modular architecture with numbered modules
+- ✅ kiosk CLI for comprehensive system management
+- ✅ Automated monitoring and recovery every 5 minutes
+- ✅ Scheduled maintenance (daily/weekly)
+- ✅ Version tracking
+- ✅ Configuration files separated from scripts
+- ✅ Individual module updates without full reinstall
 
-The Alpine Linux implementation has been moved to the `alpine-research` branch. 
-This main branch is being rebuilt with Debian for better reliability and hardware support.
-
-**Target completion**: Coming soon
-
-## Previous Work
-
-The Alpine Linux research and implementation can be found in the `alpine-research` branch, including:
-- Complete Alpine bootstrap and setup scripts
+### v0.1.0 - 2025-10-01
+- Initial Debian implementation
+- Monolithic bootstrap and update scripts
+- Basic kiosk functionality
 - Silent boot configuration
-- Auto-login implementation  
-- Font installation and management
-- Service optimization for fast boot
+
+## Application Integration
+
+The default application is `kenzie/lobby-display`, but any Vue.js application works. Requirements:
+
+- **Node.js/npm-based** with `npm run dev` command
+- **Port 5173** (Vite dev server default)
+- **Full-screen compatible** for kiosk display
+- **Offline-first** with cached JSON data support
+
+To use a different application, pass the GitHub repository URL during installation:
+
+```bash
+sudo ./install.sh https://github.com/your-username/your-kiosk-app
+```
+
+## Troubleshooting
+
+### Check System Status
+```bash
+kiosk status
+kiosk health --detailed
+```
+
+### View Logs
+```bash
+kiosk logs -f                      # Follow logs
+journalctl -u kioskbook-app -f     # Direct systemd logs
+```
+
+### Restart Services
+```bash
+sudo kiosk restart all
+```
+
+### Manual Service Management
+```bash
+systemctl status kioskbook-app
+systemctl status lightdm
+systemctl restart kioskbook-app
+```
+
+### Check Monitoring
+```bash
+systemctl status kioskbook-recovery.timer
+/usr/local/bin/kioskbook-monitor
+```
+
+## Development
+
+See [CLAUDE.md](CLAUDE.md) for detailed development guidelines, including:
+- Module development workflow
+- Configuration file management
+- Testing on live systems
+- Version control best practices
 
 ## License
 
@@ -101,7 +233,7 @@ MIT License - see LICENSE file for details.
 
 For issues and questions:
 - **GitHub Issues**: [kenzie/kioskbook](https://github.com/kenzie/kioskbook/issues)
-- **Documentation**: This README and upcoming Debian implementation
+- **Documentation**: [CLAUDE.md](CLAUDE.md) for development details
 - **Hardware Support**: Tested on Lenovo M75q-1, compatible with AMD APU systems
 
 ---

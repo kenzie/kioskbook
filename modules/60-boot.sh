@@ -85,6 +85,11 @@ fi
 
 if [[ "$updated" == true ]]; then
     update-grub
+
+    # Remove "Loading Linux..." and "Loading initial ramdisk..." messages from grub.cfg
+    sed -i '/echo.*Loading Linux/d' /boot/grub/grub.cfg
+    sed -i '/echo.*Loading initial ramdisk/d' /boot/grub/grub.cfg
+
     log_module "$module_name" "GRUB updated"
 fi
 

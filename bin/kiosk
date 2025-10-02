@@ -14,13 +14,13 @@ readonly VERSION_FILE="/etc/kioskbook/version"
 readonly KIOSKBOOK_SERVICE="kioskbook-app.service"
 readonly DISPLAY_SERVICE="lightdm.service"
 
-# Colors
-readonly RED='\033[0;31m'
-readonly GREEN='\033[0;32m'
-readonly YELLOW='\033[1;33m'
-readonly CYAN='\033[0;36m'
-readonly BLUE='\033[0;34m'
-readonly NC='\033[0m'
+# Colors (using $'...' syntax for proper escape sequence interpretation)
+readonly RED=$'\033[0;31m'
+readonly GREEN=$'\033[0;32m'
+readonly YELLOW=$'\033[1;33m'
+readonly CYAN=$'\033[0;36m'
+readonly BLUE=$'\033[1;36m'  # Bright cyan for better visibility on black background
+readonly NC=$'\033[0m'
 
 # Logging functions
 log() { printf "${CYAN}[KIOSK]${NC} %s\n" "$1"; }

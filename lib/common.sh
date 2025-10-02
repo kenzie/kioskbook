@@ -4,13 +4,13 @@
 #
 
 # Colors for output (only define if not already set)
-: "${RED:='\033[0;31m'}"
-: "${GREEN:='\033[0;32m'}"
-: "${YELLOW:='\033[1;33m'}"
-: "${CYAN:='\033[0;36m'}"
-: "${BLUE:='\033[0;34m'}"
-: "${MAGENTA:='\033[0;35m'}"
-: "${NC:='\033[0m'}"
+: "${RED:=$'\033[0;31m'}"
+: "${GREEN:=$'\033[0;32m'}"
+: "${YELLOW:=$'\033[1;33m'}"
+: "${CYAN:=$'\033[0;36m'}"
+: "${BLUE:=$'\033[1;36m'}"  # Bright cyan for better visibility on black background
+: "${MAGENTA:=$'\033[0;35m'}"
+: "${NC:=$'\033[0m'}"
 
 # Common configuration (only define if not already set)
 : "${KIOSK_USER:=kiosk}"

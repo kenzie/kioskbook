@@ -19,8 +19,8 @@ log_module "$module_name" "Configuring GRUB..."
 updated=false
 
 # Update GRUB defaults
-if ! grep -q "quiet splash loglevel=0" /etc/default/grub; then
-    sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=0 console=tty3 rd.systemd.show_status=false rd.udev.log_level=3 systemd.show_status=false amdgpu.hdcp=0 amdgpu.tmz=0 amdgpu.sg_display=0 amdgpu.gpu_recovery=1 amdgpu.noretry=0"/' /etc/default/grub
+if ! grep -q "vt.global_cursor_default=0" /etc/default/grub; then
+    sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=3 systemd.show_status=auto rd.udev.log_level=3 vt.global_cursor_default=0 console=tty3 amdgpu.hdcp=0 amdgpu.tmz=0 amdgpu.sg_display=0 amdgpu.gpu_recovery=1 amdgpu.noretry=0"/' /etc/default/grub
     updated=true
 fi
 
@@ -83,13 +83,23 @@ if ! grep -q "^GRUB_TERMINAL=" /etc/default/grub; then
     updated=true
 fi
 
+# Permanently suppress "Loading Linux..." and "Loading initial ramdisk..." messages
+# by setting quiet_boot=1 in /etc/grub.d/10_linux
+log_module "$module_name" "Configuring GRUB quiet boot..."
+if [[ -f /etc/grub.d/10_linux ]]; then
+    if ! grep -q "^quiet_boot=" /etc/grub.d/10_linux; then
+        # Insert quiet_boot=1 after "set -e" line
+        sed -i '/^set -e$/a quiet_boot=1' /etc/grub.d/10_linux
+        updated=true
+    elif grep -q "^quiet_boot=0" /etc/grub.d/10_linux; then
+        # Change quiet_boot=0 to quiet_boot=1
+        sed -i 's/^quiet_boot=0/quiet_boot=1/' /etc/grub.d/10_linux
+        updated=true
+    fi
+fi
+
 if [[ "$updated" == true ]]; then
     update-grub
-
-    # Remove "Loading Linux..." and "Loading initial ramdisk..." messages from grub.cfg
-    sed -i '/echo.*Loading Linux/d' /boot/grub/grub.cfg
-    sed -i '/echo.*Loading initial ramdisk/d' /boot/grub/grub.cfg
-
     log_module "$module_name" "GRUB updated"
 fi
 

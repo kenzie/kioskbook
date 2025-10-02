@@ -7,7 +7,12 @@ if [ ! -f /opt/kiosk-app/.git/config ]; then
     # Install Node.js dependencies
     if [ -f package.json ]; then
         npm install
-        
+
+        # Install lightningcss if Tailwind CSS v4 is used
+        if grep -q "@tailwindcss/vite" package.json; then
+            npm install lightningcss --save
+        fi
+
         # Build Vue.js app for production
         if [ -f vue.config.js ] || grep -q "vue" package.json; then
             npm run build

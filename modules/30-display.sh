@@ -25,7 +25,8 @@ DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
     xserver-xorg-video-amdgpu \
     mesa-vulkan-drivers \
     vainfo \
-    unclutter-xfixes
+    unclutter-xfixes \
+    xdotool
 
 # Install Chromium
 log_module "$module_name" "Installing Chromium browser..."

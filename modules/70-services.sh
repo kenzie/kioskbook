@@ -47,6 +47,25 @@ systemctl daemon-reload
 systemctl enable kioskbook-recovery.timer
 systemctl start kioskbook-recovery.timer
 
+# Install screensaver scripts
+log_module "$module_name" "Installing screensaver system..."
+cp "$SCRIPT_DIR/configs/screensaver/navigate-to-screensaver.sh" /usr/local/bin/kioskbook-screensaver-on
+cp "$SCRIPT_DIR/configs/screensaver/navigate-to-app.sh" /usr/local/bin/kioskbook-screensaver-off
+chmod +x /usr/local/bin/kioskbook-screensaver-on
+chmod +x /usr/local/bin/kioskbook-screensaver-off
+
+# Install screensaver timers
+cp "$SCRIPT_DIR/configs/systemd/kioskbook-screensaver-on.service" /etc/systemd/system/kioskbook-screensaver-on.service
+cp "$SCRIPT_DIR/configs/systemd/kioskbook-screensaver-on.timer" /etc/systemd/system/kioskbook-screensaver-on.timer
+cp "$SCRIPT_DIR/configs/systemd/kioskbook-screensaver-off.service" /etc/systemd/system/kioskbook-screensaver-off.service
+cp "$SCRIPT_DIR/configs/systemd/kioskbook-screensaver-off.timer" /etc/systemd/system/kioskbook-screensaver-off.timer
+
+systemctl daemon-reload
+systemctl enable kioskbook-screensaver-on.timer
+systemctl enable kioskbook-screensaver-off.timer
+systemctl start kioskbook-screensaver-on.timer
+systemctl start kioskbook-screensaver-off.timer
+
 # Setup scheduled maintenance
 log_module "$module_name" "Setting up scheduled maintenance..."
 cp "$SCRIPT_DIR/configs/monitoring/kioskbook-cron" /etc/cron.d/kioskbook

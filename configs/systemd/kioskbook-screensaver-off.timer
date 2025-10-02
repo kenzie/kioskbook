@@ -1,0 +1,10 @@
+[Unit]
+Description=KioskBook Screensaver Deactivation Timer
+Requires=kioskbook-screensaver-off.service
+
+[Timer]
+OnCalendar=*-*-* 07:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Route 19 Screensaver</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #000;
+            overflow: hidden;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+
+        #team-logo {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 400px;
+            height: auto;
+            animation: floatTeam 8s ease-in-out infinite;
+        }
+
+        #bottom-bar {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            animation: floatBottom 6s ease-in-out infinite;
+        }
+
+        #route19-logo {
+            height: 32px;
+            width: auto;
+        }
+
+        #datetime {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 18px;
+            font-weight: 400;
+            letter-spacing: 0.5px;
+        }
+
+        @keyframes floatTeam {
+            0%, 100% {
+                transform: translate(-50%, -50%) translateX(-30px);
+            }
+            50% {
+                transform: translate(-50%, -50%) translateX(30px);
+            }
+        }
+
+        @keyframes floatBottom {
+            0%, 100% {
+                transform: translateX(-50%) translateX(-20px);
+            }
+            50% {
+                transform: translateX(-50%) translateX(20px);
+            }
+        }
+    </style>
+</head>
+<body>
+    <img id="team-logo" src="file:///opt/kioskbook-repo/assets/team-logo.png" alt="Team Logo">
+
+    <div id="bottom-bar">
+        <img id="route19-logo" src="file:///opt/kioskbook-repo/assets/route19-logo.png" alt="Route 19">
+        <div id="datetime"></div>
+    </div>
+
+    <script>
+        function updateDateTime() {
+            const now = new Date();
+            const options = {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            };
+            document.getElementById('datetime').textContent = now.toLocaleDateString('en-US', options);
+        }
+
+        // Update immediately and then every second
+        updateDateTime();
+        setInterval(updateDateTime, 1000);
+    </script>
+</body>
+</html>

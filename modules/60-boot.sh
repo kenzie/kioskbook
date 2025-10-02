@@ -29,7 +29,8 @@ plymouth_updated=false
 # Update GRUB defaults for Plymouth (requires 'splash' parameter and loglevel=0)
 # Note: Removed console=tty3 as it conflicts with Plymouth display on tty1
 current_params=$(grep "^GRUB_CMDLINE_LINUX_DEFAULT" /etc/default/grub || echo "")
-if ! echo "$current_params" | grep -q "splash" || ! echo "$current_params" | grep -q "loglevel=0"; then
+# Update if missing splash/loglevel=0, OR if console=tty3 is present (needs removal)
+if ! echo "$current_params" | grep -q "splash" || ! echo "$current_params" | grep -q "loglevel=0" || echo "$current_params" | grep -q "console=tty3"; then
     sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=0 systemd.show_status=false rd.udev.log_level=0 vt.global_cursor_default=0 amdgpu.hdcp=0 amdgpu.tmz=0 amdgpu.sg_display=0 amdgpu.gpu_recovery=1 amdgpu.noretry=0"/' /etc/default/grub
     plymouth_updated=true
 fi

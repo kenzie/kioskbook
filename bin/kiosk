@@ -233,6 +233,14 @@ cmd_update() {
     cd "$REPO_DIR"
     git pull
 
+    # Update kiosk CLI first (before loading common.sh)
+    if [[ "$module_name" == "all" ]]; then
+        log "Updating kiosk CLI..."
+        cp "$REPO_DIR/bin/kiosk" /usr/local/bin/kiosk
+        chmod +x /usr/local/bin/kiosk
+        log_success "kiosk CLI updated"
+    fi
+
     # Load common functions
     source "$REPO_DIR/lib/common.sh"
 

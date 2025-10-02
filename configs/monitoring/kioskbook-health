@@ -1,0 +1,30 @@
+#!/bin/bash
+# Basic health check for KioskBook
+
+echo "=== KioskBook Health Check ==="
+echo "Date: $(date)"
+echo
+
+# Check application service
+echo "Application Service:"
+systemctl is-active kioskbook-app || echo "❌ Application not running"
+
+# Check display
+echo "Display:"
+if pgrep -f "chromium.*kiosk" >/dev/null; then
+    echo "✅ Chromium kiosk running"
+else
+    echo "❌ Chromium kiosk not running"
+fi
+
+# Check network
+echo "Network:"
+if ping -c 1 google.com >/dev/null 2>&1; then
+    echo "✅ Network connectivity"
+else
+    echo "❌ No network connectivity"
+fi
+
+# System load
+echo "System Load: $(uptime | awk '{print $NF}')"
+echo "Memory: $(free -h | awk '/^Mem:/ {print $3"/"$2}')"

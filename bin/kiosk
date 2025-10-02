@@ -1,0 +1,424 @@
+#!/bin/bash
+#
+# KioskBook Management CLI
+#
+# Manage and monitor KioskBook kiosk installations
+#
+
+set -euo pipefail
+
+# Configuration
+readonly REPO_DIR="/opt/kioskbook-repo"
+readonly APP_DIR="/opt/kioskbook"
+readonly VERSION_FILE="/etc/kioskbook/version"
+readonly KIOSKBOOK_SERVICE="kioskbook-app.service"
+readonly DISPLAY_SERVICE="lightdm.service"
+
+# Colors
+readonly RED='\033[0;31m'
+readonly GREEN='\033[0;32m'
+readonly YELLOW='\033[1;33m'
+readonly CYAN='\033[0;36m'
+readonly BLUE='\033[0;34m'
+readonly NC='\033[0m'
+
+# Logging functions
+log() { printf "${CYAN}[KIOSK]${NC} %s\n" "$1"; }
+log_success() { printf "${GREEN}[SUCCESS]${NC} %s\n" "$1"; }
+log_warning() { printf "${YELLOW}[WARNING]${NC} %s\n" "$1"; }
+log_error() { printf "${RED}[ERROR]${NC} %s\n" "$1" >&2; exit 1; }
+
+# Check if running as root
+require_root() {
+    if [[ $EUID -ne 0 ]]; then
+        log_error "This command must be run as root (use sudo)"
+    fi
+}
+
+# Get installed version
+get_installed_version() {
+    if [[ -f "$VERSION_FILE" ]]; then
+        cat "$VERSION_FILE"
+    else
+        echo "unknown"
+    fi
+}
+
+# Get repository version
+get_repo_version() {
+    if [[ -f "$REPO_DIR/VERSION" ]]; then
+        cat "$REPO_DIR/VERSION"
+    else
+        echo "unknown"
+    fi
+}
+
+# Command: version
+cmd_version() {
+    local installed=$(get_installed_version)
+    local repo=$(get_repo_version)
+
+    echo -e "${CYAN}KioskBook Version Information${NC}"
+    echo -e "Installed version: ${GREEN}$installed${NC}"
+
+    if [[ -d "$REPO_DIR" ]]; then
+        echo -e "Repository version: ${GREEN}$repo${NC}"
+
+        if [[ "$installed" != "$repo" ]]; then
+            echo -e "${YELLOW}⚠️  Update available!${NC} Run: ${YELLOW}kiosk update all${NC}"
+        fi
+    fi
+}
+
+# Command: status
+cmd_status() {
+    echo -e "${CYAN}KioskBook System Status${NC}\n"
+
+    # Application service
+    echo -n "Application Service: "
+    if systemctl is-active --quiet "$KIOSKBOOK_SERVICE"; then
+        echo -e "${GREEN}✅ Running${NC}"
+    else
+        echo -e "${RED}❌ Stopped${NC}"
+    fi
+
+    # Display service
+    echo -n "Display Service: "
+    if systemctl is-active --quiet "$DISPLAY_SERVICE"; then
+        echo -e "${GREEN}✅ Running${NC}"
+    else
+        echo -e "${RED}❌ Stopped${NC}"
+    fi
+
+    # Chromium kiosk
+    echo -n "Chromium Kiosk: "
+    if pgrep -f "chromium.*kiosk" >/dev/null; then
+        echo -e "${GREEN}✅ Running${NC}"
+    else
+        echo -e "${RED}❌ Not running${NC}"
+    fi
+
+    # Network
+    echo -n "Network: "
+    if ping -c 1 -W 2 google.com >/dev/null 2>&1; then
+        echo -e "${GREEN}✅ Connected${NC}"
+    else
+        echo -e "${YELLOW}⚠️  Offline${NC}"
+    fi
+
+    # Tailscale
+    echo -n "Tailscale VPN: "
+    if command -v tailscale >/dev/null 2>&1; then
+        if tailscale status >/dev/null 2>&1; then
+            echo -e "${GREEN}✅ Connected${NC}"
+        else
+            echo -e "${YELLOW}⚠️  Not connected${NC}"
+        fi
+    else
+        echo -e "${BLUE}Not installed${NC}"
+    fi
+
+    # Uptime
+    echo -e "\nSystem Uptime: $(uptime -p)"
+    echo -e "Load Average: $(uptime | awk -F'load average:' '{print $2}')"
+
+    # Memory
+    echo -e "Memory Usage: $(free -h | awk '/^Mem:/ {print $3"/"$2" ("int($3/$2*100)"%)"}')"
+
+    # Application port check
+    echo -n "Application Port (5173): "
+    if curl -s --max-time 2 http://localhost:5173 >/dev/null 2>&1; then
+        echo -e "${GREEN}✅ Responding${NC}"
+    else
+        echo -e "${RED}❌ Not responding${NC}"
+    fi
+}
+
+# Command: health
+cmd_health() {
+    local detailed=false
+    if [[ "${1:-}" == "--detailed" ]] || [[ "${1:-}" == "-d" ]]; then
+        detailed=true
+    fi
+
+    if [[ -x /usr/local/bin/kioskbook-health ]]; then
+        /usr/local/bin/kioskbook-health
+    else
+        log_warning "Health check script not installed"
+        cmd_status
+    fi
+
+    if [[ "$detailed" == true ]]; then
+        echo -e "\n${CYAN}Detailed System Information${NC}"
+        echo -e "Kernel: $(uname -r)"
+        echo -e "OS: $(cat /etc/os-release | grep PRETTY_NAME | cut -d'"' -f2)"
+        echo -e "Node.js: $(node --version 2>/dev/null || echo 'Not installed')"
+        echo -e "npm: $(npm --version 2>/dev/null || echo 'Not installed')"
+
+        echo -e "\n${CYAN}Disk Usage${NC}"
+        df -h / | tail -1 | awk '{print "Root: "$3"/"$2" ("$5" used)"}'
+
+        echo -e "\n${CYAN}Service Status${NC}"
+        systemctl status "$KIOSKBOOK_SERVICE" --no-pager -l | head -10
+    fi
+}
+
+# Command: logs
+cmd_logs() {
+    local follow=false
+    local lines=50
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -f|--follow)
+                follow=true
+                shift
+                ;;
+            -n|--lines)
+                lines="$2"
+                shift 2
+                ;;
+            *)
+                shift
+                ;;
+        esac
+    done
+
+    if [[ "$follow" == true ]]; then
+        journalctl -u "$KIOSKBOOK_SERVICE" -f
+    else
+        journalctl -u "$KIOSKBOOK_SERVICE" -n "$lines" --no-pager
+    fi
+}
+
+# Command: modules
+cmd_modules() {
+    if [[ ! -d "$REPO_DIR/modules" ]]; then
+        log_error "Repository not found at $REPO_DIR. Run migration first."
+    fi
+
+    echo -e "${CYAN}Available Modules${NC}\n"
+
+    for module in $(find "$REPO_DIR/modules" -name "[0-9][0-9]-*.sh" | sort); do
+        local name=$(basename "$module")
+        local description=$(grep "^# Description:" "$module" | sed 's/^# Description: //')
+        printf "  ${GREEN}%-20s${NC} %s\n" "$name" "$description"
+    done
+
+    echo -e "\n${CYAN}Usage${NC}"
+    echo "  Update single module: kiosk update <module-name>"
+    echo "  Update all modules:   kiosk update all"
+    echo ""
+    echo "Examples:"
+    echo "  kiosk update 30-display"
+    echo "  kiosk update 70-services"
+}
+
+# Command: update
+cmd_update() {
+    require_root
+
+    if [[ ! -d "$REPO_DIR" ]]; then
+        log_error "Repository not found at $REPO_DIR. Run migration first."
+    fi
+
+    local module_name="${1:-}"
+
+    if [[ -z "$module_name" ]]; then
+        log_error "Usage: kiosk update <module-name|all>"
+    fi
+
+    # Pull latest from repo
+    log "Pulling latest changes from repository..."
+    cd "$REPO_DIR"
+    git pull
+
+    # Load common functions
+    source "$REPO_DIR/lib/common.sh"
+
+    if [[ "$module_name" == "all" ]]; then
+        log "Updating all modules..."
+
+        for module in $(find "$REPO_DIR/modules" -name "[0-9][0-9]-*.sh" | sort); do
+            log "Running module: $(basename "$module")"
+            bash "$module"
+        done
+
+        # Update installed version
+        if [[ -f "$REPO_DIR/VERSION" ]]; then
+            mkdir -p "$(dirname "$VERSION_FILE")"
+            cp "$REPO_DIR/VERSION" "$VERSION_FILE"
+            log_success "Updated to version $(cat "$VERSION_FILE")"
+        fi
+    else
+        # Update single module
+        local module_path=""
+
+        # Try with .sh extension
+        if [[ -f "$REPO_DIR/modules/${module_name}.sh" ]]; then
+            module_path="$REPO_DIR/modules/${module_name}.sh"
+        elif [[ -f "$REPO_DIR/modules/$module_name" ]]; then
+            module_path="$REPO_DIR/modules/$module_name"
+        else
+            log_error "Module not found: $module_name"
+        fi
+
+        log "Running module: $(basename "$module_path")"
+        bash "$module_path"
+    fi
+
+    log_success "Update complete"
+}
+
+# Command: restart
+cmd_restart() {
+    require_root
+
+    local service="${1:-all}"
+
+    case "$service" in
+        app|application)
+            log "Restarting application service..."
+            systemctl restart "$KIOSKBOOK_SERVICE"
+            log_success "Application restarted"
+            ;;
+        display)
+            log "Restarting display service..."
+            systemctl restart "$DISPLAY_SERVICE"
+            log_success "Display restarted"
+            ;;
+        all)
+            log "Restarting all services..."
+            systemctl restart "$KIOSKBOOK_SERVICE"
+            systemctl restart "$DISPLAY_SERVICE"
+            log_success "All services restarted"
+            ;;
+        *)
+            log_error "Usage: kiosk restart [app|display|all]"
+            ;;
+    esac
+}
+
+# Command: maintenance
+cmd_maintenance() {
+    require_root
+
+    log "Running maintenance tasks..."
+
+    # Update system packages
+    log "Updating system packages..."
+    apt-get update
+    DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
+
+    # Clean up old packages
+    log "Cleaning up old packages..."
+    apt-get autoremove --purge -y
+    apt-get clean
+
+    # Clean old journal logs
+    log "Cleaning old journal logs..."
+    journalctl --vacuum-time=7d
+
+    # Update application
+    if [[ -d "$APP_DIR/.git" ]]; then
+        log "Updating application..."
+        cd "$APP_DIR"
+        git pull
+        npm ci
+    fi
+
+    log_success "Maintenance complete"
+}
+
+# Command: monitor
+cmd_monitor() {
+    if [[ -x /usr/local/bin/kioskbook-monitor ]]; then
+        /usr/local/bin/kioskbook-monitor
+    else
+        log_warning "Monitoring script not installed"
+    fi
+}
+
+# Show help
+cmd_help() {
+    cat << EOF
+${CYAN}KioskBook Management CLI${NC}
+
+${YELLOW}Usage:${NC}
+  kiosk <command> [options]
+
+${YELLOW}Commands:${NC}
+  ${GREEN}version${NC}              Show installed version
+  ${GREEN}status${NC}               Show system status
+  ${GREEN}health${NC} [--detailed] Run health check
+  ${GREEN}logs${NC} [-f] [-n NUM]  View application logs
+  ${GREEN}modules${NC}              List available modules
+  ${GREEN}update${NC} <module|all> Update specific module or all
+  ${GREEN}restart${NC} [service]    Restart services (app|display|all)
+  ${GREEN}maintenance${NC}          Run maintenance tasks
+  ${GREEN}monitor${NC}              Run monitoring check
+  ${GREEN}help${NC}                 Show this help message
+
+${YELLOW}Examples:${NC}
+  kiosk status
+  kiosk health --detailed
+  kiosk logs -f
+  kiosk update 30-display
+  kiosk update all
+  kiosk restart app
+  kiosk maintenance
+
+${YELLOW}Version Management:${NC}
+  Use ${GREEN}kiosk version${NC} to check for updates
+  Use ${GREEN}kiosk update all${NC} to update to latest version
+
+EOF
+}
+
+# Main command dispatcher
+main() {
+    local command="${1:-help}"
+
+    case "$command" in
+        version|v)
+            cmd_version
+            ;;
+        status|s)
+            cmd_status
+            ;;
+        health|h)
+            shift
+            cmd_health "$@"
+            ;;
+        logs|l)
+            shift
+            cmd_logs "$@"
+            ;;
+        modules|m)
+            cmd_modules
+            ;;
+        update|u)
+            shift
+            cmd_update "$@"
+            ;;
+        restart|r)
+            shift
+            cmd_restart "$@"
+            ;;
+        maintenance)
+            cmd_maintenance
+            ;;
+        monitor)
+            cmd_monitor
+            ;;
+        help|--help|-h)
+            cmd_help
+            ;;
+        *)
+            log_error "Unknown command: $command\nRun 'kiosk help' for usage information."
+            ;;
+    esac
+}
+
+# Run main
+main "$@"

@@ -1,0 +1,32 @@
+#!/bin/bash
+# Hide cursor after 1 second of inactivity
+unclutter -idle 1 &
+
+# Disable screen blanking
+xset s off
+xset -dpms
+xset s noblank
+
+# Wait for application to be ready (Vite dev server runs on 5173)
+while ! curl -s http://localhost:5173 >/dev/null 2>&1; do
+    sleep 1
+done
+
+# Start Chromium in kiosk mode with font optimization
+exec chromium \
+    --kiosk \
+    --no-sandbox \
+    --disable-infobars \
+    --disable-features=TranslateUI \
+    --disable-ipc-flooding-protection \
+    --no-first-run \
+    --fast \
+    --fast-start \
+    --disable-default-apps \
+    --disable-popup-blocking \
+    --disable-prompt-on-repost \
+    --no-message-box \
+    --start-fullscreen \
+    --force-device-scale-factor=1 \
+    --font-render-hinting=none \
+    http://localhost:5173

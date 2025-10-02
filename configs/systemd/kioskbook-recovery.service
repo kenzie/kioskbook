@@ -1,0 +1,11 @@
+[Unit]
+Description=KioskBook Automatic Recovery
+After=kioskbook-app.service lightdm.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/kioskbook-monitor
+User=root
+
+[Install]
+WantedBy=multi-user.target

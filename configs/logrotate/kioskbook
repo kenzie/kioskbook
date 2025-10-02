@@ -1,0 +1,18 @@
+# KioskBook log rotation
+/var/log/kioskbook/*.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 644 root root
+}
+
+# Systemd journal for kioskbook-app
+{
+    # Handled by systemd, but ensure cleanup
+    postrotate
+        systemctl reload-or-restart rsyslog > /dev/null 2>&1 || true
+    endscript
+}

@@ -1,0 +1,21 @@
+#!/bin/bash
+# Manage swap based on memory usage
+
+MEMORY_THRESHOLD=90
+SWAP_FILE="/swapfile"
+SWAP_SIZE="1G"
+
+check_memory() {
+    local memory_percent=$(free | awk '/^Mem:/ {printf "%.0f", $3/$2*100}')
+    if [[ $memory_percent -gt $MEMORY_THRESHOLD ]]; then
+        if [[ ! -f "$SWAP_FILE" ]]; then
+            echo "Creating emergency swap file..."
+            fallocate -l $SWAP_SIZE $SWAP_FILE
+            chmod 600 $SWAP_FILE
+            mkswap $SWAP_FILE
+            swapon $SWAP_FILE
+        fi
+    fi
+}
+
+check_memory

@@ -1,0 +1,67 @@
+#!/bin/bash
+# KioskBook monitoring and recovery script
+
+LOG_FILE="/var/log/kioskbook/monitor.log"
+MAX_MEMORY_MB=2048
+MAX_LOAD=5.0
+
+log_monitor() {
+    echo "$(date): $1" >> "$LOG_FILE"
+}
+
+# Check memory usage
+check_memory() {
+    local memory_mb=$(free -m | awk '/^Mem:/ {print $3}')
+    if [[ $memory_mb -gt $MAX_MEMORY_MB ]]; then
+        log_monitor "HIGH MEMORY: ${memory_mb}MB > ${MAX_MEMORY_MB}MB"
+        return 1
+    fi
+    return 0
+}
+
+# Check system load
+check_load() {
+    local load=$(cat /proc/loadavg | awk '{print $1}')
+    if (( $(awk "BEGIN {print ($load > $MAX_LOAD)}") )); then
+        log_monitor "HIGH LOAD: $load > $MAX_LOAD"
+        return 1
+    fi
+    return 0
+}
+
+# Check if Chromium is running
+check_chromium() {
+    if ! pgrep -f "chromium.*kiosk" >/dev/null; then
+        log_monitor "RECOVERY: Chromium not running, restarting display"
+        systemctl restart lightdm
+        return 1
+    fi
+    return 0
+}
+
+# Check if application is responding
+check_application() {
+    if ! curl -s --max-time 5 http://localhost:5173 >/dev/null; then
+        log_monitor "RECOVERY: Application not responding, restarting service"
+        systemctl restart kioskbook-app
+        return 1
+    fi
+    return 0
+}
+
+# Main monitoring loop
+main() {
+    mkdir -p "$(dirname "$LOG_FILE")"
+
+    check_memory
+    check_load
+    check_chromium
+    check_application
+
+    # Log success if all checks pass
+    if [[ $? -eq 0 ]]; then
+        log_monitor "All systems healthy"
+    fi
+}
+
+main "$@"

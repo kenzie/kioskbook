@@ -26,8 +26,8 @@ fi
 log_module "$module_name" "Configuring GRUB..."
 plymouth_updated=false
 
-# Update GRUB defaults for Plymouth (requires 'splash' parameter)
-if ! grep -q "splash.*amdgpu.gpu_recovery=1" /etc/default/grub; then
+# Update GRUB defaults for Plymouth (requires 'splash' parameter and loglevel=0)
+if ! grep -q "loglevel=0.*splash" /etc/default/grub; then
     sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=0 systemd.show_status=false rd.udev.log_level=0 vt.global_cursor_default=0 console=tty3 amdgpu.hdcp=0 amdgpu.tmz=0 amdgpu.sg_display=0 amdgpu.gpu_recovery=1 amdgpu.noretry=0"/' /etc/default/grub
     plymouth_updated=true
 fi
@@ -97,11 +97,18 @@ if [[ ! -d "$theme_dir" ]] || [[ ! -f "$theme_dir/route19.plymouth" ]]; then
     log_module "$module_name" "Route 19 theme installed"
 fi
 
-# Set Route 19 as default Plymouth theme
+# Set Route 19 as default Plymouth theme (Debian way using update-alternatives)
 log_module "$module_name" "Setting Route 19 as default theme..."
-current_theme=$(plymouth-set-default-theme 2>/dev/null || echo "")
-if [[ "$current_theme" != "route19" ]]; then
-    plymouth-set-default-theme route19
+theme_file="$theme_dir/route19.plymouth"
+
+# Register and set Route 19 theme as default
+if [[ -f "$theme_file" ]]; then
+    # Install alternative (doesn't error if already exists)
+    update-alternatives --install /usr/share/plymouth/themes/default.plymouth default.plymouth "$theme_file" 100 >/dev/null 2>&1 || true
+
+    # Set as default
+    update-alternatives --set default.plymouth "$theme_file" >/dev/null 2>&1
+
     plymouth_updated=true
     log_module "$module_name" "Route 19 theme activated"
 fi

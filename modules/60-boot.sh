@@ -39,8 +39,11 @@ if ! grep -q "^GRUB_CMDLINE_LINUX=" /etc/default/grub; then
     updated=true
 fi
 
-if ! grep -q "^GRUB_TERMINAL_OUTPUT=console" /etc/default/grub; then
-    echo "GRUB_TERMINAL_OUTPUT=console" >> /etc/default/grub
+if ! grep -q "^GRUB_TERMINAL_OUTPUT=gfxterm" /etc/default/grub; then
+    sed -i 's/^GRUB_TERMINAL_OUTPUT=.*/GRUB_TERMINAL_OUTPUT=gfxterm/' /etc/default/grub
+    if ! grep -q "^GRUB_TERMINAL_OUTPUT=" /etc/default/grub; then
+        echo "GRUB_TERMINAL_OUTPUT=gfxterm" >> /etc/default/grub
+    fi
     updated=true
 fi
 
@@ -54,8 +57,8 @@ if ! grep -q "^GRUB_DISABLE_RECOVERY=true" /etc/default/grub; then
     updated=true
 fi
 
-if ! grep -q "^GRUB_GFXMODE=text" /etc/default/grub; then
-    echo "GRUB_GFXMODE=text" >> /etc/default/grub
+if ! grep -q "^GRUB_GFXMODE=" /etc/default/grub; then
+    echo "GRUB_GFXMODE=1024x768" >> /etc/default/grub
     updated=true
 fi
 

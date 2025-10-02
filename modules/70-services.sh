@@ -17,6 +17,11 @@ log_module "$module_name" "Starting services and monitoring setup..."
 # Create log directory
 mkdir -p /var/log/kioskbook
 
+# Install kiosk CLI
+log_module "$module_name" "Installing kiosk CLI..."
+cp "$SCRIPT_DIR/bin/kiosk" /usr/local/bin/kiosk
+chmod +x /usr/local/bin/kiosk
+
 # Install monitoring scripts
 log_module "$module_name" "Installing monitoring scripts..."
 cp "$SCRIPT_DIR/configs/monitoring/kioskbook-monitor" /usr/local/bin/kioskbook-monitor

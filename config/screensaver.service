@@ -1,7 +1,0 @@
-#!/sbin/openrc-run
-name="screensaver"
-description="KioskBook Screensaver Service"
-command="/opt/screensaver-control.sh"
-command_background="yes"
-pidfile="/var/run/screensaver.pid"
-start_stop_daemon_args="--chdir /opt"

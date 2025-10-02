@@ -1,7 +1,0 @@
-#!/sbin/openrc-run
-name="kiosk-browser"
-description="Kiosk Browser Service"
-command="/opt/kiosk-browser.sh"
-command_background="yes"
-pidfile="/var/run/kiosk-browser.pid"
-start_stop_daemon_args="--chdir /opt"

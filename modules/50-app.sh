@@ -48,12 +48,13 @@ fi
 log_module "$module_name" "Installing dependencies..."
 npm ci
 
-# Try to build if build script exists
-if npm run build 2>/dev/null; then
-    log_module "$module_name" "Application built successfully"
-else
-    log_module "$module_name" "No build script found, using development mode"
-fi
+# Install serve for production static file serving
+log_module "$module_name" "Installing serve globally..."
+npm install -g serve
+
+# Build production version
+log_module "$module_name" "Building production version..."
+npm run build
 
 # Install systemd service
 log_module "$module_name" "Installing systemd service..."

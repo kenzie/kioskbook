@@ -29,5 +29,4 @@ exec chromium \
     --start-fullscreen \
     --force-device-scale-factor=1 \
     --font-render-hinting=none \
-    --remote-debugging-port=9222 \
     http://localhost:5173

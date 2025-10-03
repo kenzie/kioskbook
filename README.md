@@ -98,8 +98,8 @@ KioskBook v0.2.4 uses a modular architecture for easy maintenance and selective 
 
 ```
 kioskbook/
-├── install.sh              # Main installer orchestrator
-├── modules/                # Installation modules (run in order)
+├── install.sh             # Main installer orchestrator
+├── modules/               # Installation modules (run in order)
 │   ├── 10-base.sh         # Base system packages
 │   ├── 20-network.sh      # SSH, Tailscale VPN
 │   ├── 30-display.sh      # X11, OpenBox, LightDM, Chromium
@@ -107,7 +107,7 @@ kioskbook/
 │   ├── 50-app.sh          # Node.js, application deployment
 │   ├── 60-boot.sh         # Branded boot with Plymouth
 │   └── 70-services.sh     # Monitoring, recovery, maintenance
-├── configs/                # All configuration files
+├── configs/               # All configuration files
 ├── bin/kiosk              # Management CLI tool
 └── lib/common.sh          # Shared functions
 ```

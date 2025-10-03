@@ -60,9 +60,9 @@ npm run build
 log_module "$module_name" "Installing systemd service..."
 cp "$SCRIPT_DIR/configs/systemd/kioskbook-app.service" /etc/systemd/system/kioskbook-app.service
 
-# Enable and start service
+# Enable and restart service
 systemctl daemon-reload
 systemctl enable kioskbook-app
-systemctl start kioskbook-app
+systemctl restart kioskbook-app
 
 log_module_success "$module_name" "Application installed and running"

@@ -262,13 +262,22 @@ cmd_update() {
         # Update single module
         local module_path=""
 
-        # Try with .sh extension
+        # Try exact match with .sh extension
         if [[ -f "$REPO_DIR/modules/${module_name}.sh" ]]; then
             module_path="$REPO_DIR/modules/${module_name}.sh"
+        # Try exact match without extension
         elif [[ -f "$REPO_DIR/modules/$module_name" ]]; then
             module_path="$REPO_DIR/modules/$module_name"
+        # Try matching with number prefix (e.g., "app" matches "50-app.sh")
         else
-            log_error "Module not found: $module_name"
+            local matches=($(find "$REPO_DIR/modules" -name "[0-9][0-9]-${module_name}.sh" 2>/dev/null))
+            if [[ ${#matches[@]} -eq 1 ]]; then
+                module_path="${matches[0]}"
+            elif [[ ${#matches[@]} -gt 1 ]]; then
+                log_error "Multiple modules match '$module_name': ${matches[*]}"
+            else
+                log_error "Module not found: $module_name"
+            fi
         fi
 
         log "Running module: $(basename "$module_path")"

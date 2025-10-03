@@ -37,23 +37,25 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs
 # Clone or update application
 if [[ -d "$APP_DIR" ]]; then
     log_module "$module_name" "Application directory exists, updating..."
-    cd "$APP_DIR"
-    if [[ -d .git ]]; then
-        git pull
+    if [[ -d "$APP_DIR/.git" ]]; then
+        # If owned by service user, run git as that user
+        if [[ $(stat -c '%U' "$APP_DIR") == "$APP_USER" ]]; then
+            sudo -u "$APP_USER" git -C "$APP_DIR" pull
+        else
+            git -C "$APP_DIR" pull
+        fi
     else
         log_module "$module_name" "Not a git repository, removing and cloning fresh..."
-        cd /
         rm -rf "$APP_DIR"
         git clone "$GITHUB_REPO" "$APP_DIR"
-        cd "$APP_DIR"
     fi
 else
     log_module "$module_name" "Cloning application..."
     git clone "$GITHUB_REPO" "$APP_DIR"
-    cd "$APP_DIR"
 fi
 
-# Install dependencies
+# Install dependencies and build as root (needs npm global access)
+cd "$APP_DIR"
 log_module "$module_name" "Installing dependencies..."
 npm ci
 

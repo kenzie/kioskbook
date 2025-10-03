@@ -1,0 +1,13 @@
+# KioskBook Security - Restricted sudo access for kiosk user
+#
+# This file restricts the kiosk user to only run specific commands with sudo,
+# preventing privilege escalation while maintaining operational functionality.
+
+# Allow kiosk user to run management CLI
+kiosk ALL=(ALL) NOPASSWD: /usr/local/bin/kiosk
+
+# Allow direct service control for emergency manual intervention
+kiosk ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart kioskbook-app.service
+kiosk ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart lightdm.service
+kiosk ALL=(ALL) NOPASSWD: /usr/bin/systemctl status *
+kiosk ALL=(ALL) NOPASSWD: /usr/bin/journalctl *

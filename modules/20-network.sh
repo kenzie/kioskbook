@@ -33,6 +33,36 @@ if ! grep -q "^GSSAPIAuthentication no" "$ssh_config"; then
     log_module "$module_name" "Added GSSAPIAuthentication no"
 fi
 
+# Disable root login
+if ! grep -q "^PermitRootLogin no" "$ssh_config"; then
+    # If PermitRootLogin exists (commented or not), replace it
+    if grep -q "^#\?PermitRootLogin" "$ssh_config"; then
+        sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' "$ssh_config"
+    else
+        # Otherwise append it
+        echo "PermitRootLogin no" >> "$ssh_config"
+    fi
+    updated=true
+    log_module "$module_name" "Disabled root login"
+fi
+
+# Only allow kiosk user
+if ! grep -q "^AllowUsers kiosk" "$ssh_config"; then
+    echo "AllowUsers kiosk" >> "$ssh_config"
+    updated=true
+    log_module "$module_name" "Restricted SSH access to kiosk user"
+fi
+
+# Remove duplicate lines at end of file (from previous runs)
+# Keep only the first occurrence of each security setting
+if grep -c "^PermitRootLogin no" "$ssh_config" | grep -q "^[2-9]"; then
+    # Multiple PermitRootLogin lines exist, remove duplicates
+    # Keep the first occurrence (line 33 area), remove ones at end
+    sed -i '/^PermitRootLogin no/!b; :a; n; /^PermitRootLogin no/d; ba' "$ssh_config"
+    updated=true
+    log_module "$module_name" "Removed duplicate PermitRootLogin entries"
+fi
+
 # Pre-generate SSH host keys if missing
 if [[ ! -f /etc/ssh/ssh_host_rsa_key ]]; then
     ssh-keygen -A

@@ -36,17 +36,23 @@ DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
 # Create kiosk user if it doesn't exist
 log_module "$module_name" "Creating kiosk user..."
 if ! id "$KIOSK_USER" >/dev/null 2>&1; then
-    useradd -m -s /bin/bash -G audio,video,sudo "$KIOSK_USER"
+    useradd -m -s /bin/bash -G audio,video "$KIOSK_USER"
     log_module "$module_name" "Created user: $KIOSK_USER"
 else
     log_module "$module_name" "User $KIOSK_USER already exists"
 fi
 
-# Ensure kiosk user is in sudo group (for existing users)
-if ! groups "$KIOSK_USER" | grep -q sudo; then
-    usermod -aG sudo "$KIOSK_USER"
-    log_module "$module_name" "Added $KIOSK_USER to sudo group"
+# Remove kiosk user from sudo group (restricted sudoers config will be used instead)
+if groups "$KIOSK_USER" | grep -q sudo; then
+    gpasswd -d "$KIOSK_USER" sudo
+    log_module "$module_name" "Removed $KIOSK_USER from sudo group (using restricted sudoers)"
 fi
+
+# Install restricted sudoers configuration
+log_module "$module_name" "Installing restricted sudoers configuration..."
+cp "$SCRIPT_DIR/configs/sudoers/kioskbook-security" /etc/sudoers.d/kioskbook-security
+chmod 0440 /etc/sudoers.d/kioskbook-security
+log_module "$module_name" "Restricted sudo access configured"
 
 # Create OpenBox configuration directory
 mkdir -p "$KIOSK_HOME/.config/openbox"

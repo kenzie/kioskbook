@@ -124,14 +124,24 @@ fi
 log_module "$module_name" "Installing Route 19 Plymouth theme..."
 theme_dir="/usr/share/plymouth/themes/route19"
 
-if [[ ! -d "$theme_dir" ]] || [[ ! -f "$theme_dir/route19.plymouth" ]]; then
-    mkdir -p "$theme_dir"
-    cp -r "$SCRIPT_DIR/configs/plymouth/route19/"* "$theme_dir/"
-    # Copy team logo (placeholder is route19 logo for now, replace later)
-    cp "$SCRIPT_DIR/assets/team-logo.png" "$theme_dir/"
-    plymouth_updated=true
-    log_module "$module_name" "Route 19 theme installed"
-fi
+# Read version from VERSION file
+VERSION=$(cat "$SCRIPT_DIR/VERSION" | head -n1)
+log_module "$module_name" "Using version: v$VERSION"
+
+# Always update theme files to ensure version is current
+mkdir -p "$theme_dir"
+
+# Copy theme files
+cp "$SCRIPT_DIR/configs/plymouth/route19/route19.plymouth" "$theme_dir/"
+
+# Copy and substitute version in script
+sed "s/__VERSION__/v$VERSION/g" "$SCRIPT_DIR/configs/plymouth/route19/route19.script" > "$theme_dir/route19.script"
+
+# Copy team logo (placeholder is route19 logo for now, replace later)
+cp "$SCRIPT_DIR/assets/team-logo.png" "$theme_dir/"
+
+plymouth_updated=true
+log_module "$module_name" "Route 19 theme updated with version v$VERSION"
 
 # Set Route 19 as default Plymouth theme (Debian way using update-alternatives)
 log_module "$module_name" "Setting Route 19 as default theme..."

@@ -93,13 +93,13 @@ fi
 log_module "$module_name" "Installing Route 19 GRUB background..."
 mkdir -p /boot/grub
 
-# Create properly sized background (1920x1080 with centered logo on black) if it doesn't exist
+# Create properly sized background (1920x1080 with centered 256px logo on black) if it doesn't exist
 if [[ ! -f /boot/grub/route19-grub-bg.png ]] || [[ "$SCRIPT_DIR/assets/route19-logo.png" -nt /boot/grub/route19-grub-bg.png ]]; then
     # Check if ImageMagick is available
     if command -v magick >/dev/null 2>&1; then
-        magick "$SCRIPT_DIR/assets/route19-logo.png" -background black -gravity center -extent 1920x1080 /boot/grub/route19-grub-bg.png
+        magick "$SCRIPT_DIR/assets/route19-logo.png" -resize 256x256 -background black -gravity center -extent 1920x1080 /boot/grub/route19-grub-bg.png
     elif command -v convert >/dev/null 2>&1; then
-        convert "$SCRIPT_DIR/assets/route19-logo.png" -background black -gravity center -extent 1920x1080 /boot/grub/route19-grub-bg.png
+        convert "$SCRIPT_DIR/assets/route19-logo.png" -resize 256x256 -background black -gravity center -extent 1920x1080 /boot/grub/route19-grub-bg.png
     else
         # Fallback: copy pre-generated background if available
         if [[ -f "$SCRIPT_DIR/assets/route19-grub-bg.png" ]]; then

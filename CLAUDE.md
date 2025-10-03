@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-KioskBook is a bulletproof kiosk deployment platform for Lenovo M75q-1 hardware. It transforms a minimal Debian installation into a fast-booting (<10 seconds), self-recovering kiosk running Vue.js applications in full-screen Chromium.
+KioskBook is a bulletproof kiosk deployment platform for Lenovo M75q-1 hardware. It transforms a minimal Debian installation into a fast-booting (under 10 seconds), self-recovering kiosk running Vue.js applications in full-screen Chromium.
 
 ## Architecture
 
@@ -61,9 +61,9 @@ kioskbook/
 - **Display Manager**: LightDM with auto-login
 - **Browser**: Chromium in kiosk mode (full-screen, no UI elements)
 - **Runtime**: Node.js 20.x + npm
-- **Application**: Vue.js web application (served on port 5173 via Vite dev server)
+- **Application**: Vue.js web application (production build served on port 5173 via `npx serve`)
 - **Remote Access**: Tailscale VPN + SSH (optimized for fast startup)
-- **Boot**: GRUB silent boot (no plymouth, completely silent)
+- **Boot**: GRUB + Plymouth with Route 19 branded theme (silent with logo)
 - **Fonts**: Inter (UI) + CaskaydiaCove Nerd Font (monospace)
 - **Monitoring**: Automated health checks every 5 minutes with automatic recovery
 - **Maintenance**: Scheduled updates, log rotation, automatic restarts
@@ -71,12 +71,12 @@ kioskbook/
 ### Key Design Principles
 
 1. **Modular Installation**: Numbered modules (10, 20, 30...) for clean separation and selective updates
-2. **Fast Boot**: <5 second boot time with completely silent GRUB boot
+2. **Fast Boot**: Under 10 second boot time with branded Plymouth splash (Route 19 logo)
 3. **Self-Recovery**: Multi-layer recovery (service, application, system level) with automatic monitoring
 4. **Offline-First**: Must work without network using cached JSON data
 5. **Minimal Surface**: Debian minimal installation for security and performance
 6. **Unattended Operation**: Designed for months without physical access
-7. **Silent Operation**: No boot text, completely black screen until application loads
+7. **Branded Boot**: Plymouth splash with Route 19 logo, no kernel text messages
 8. **Local Development**: Test module updates on live system from local repo before committing
 
 ## Common Commands
@@ -191,7 +191,7 @@ Use UTM or VirtualBox with Debian 13.1.0 netinst. Match Lenovo M75q-1 specs:
 ## Critical Requirements
 
 ### Performance Targets
-- Boot time: <5 seconds from power on to application display (completely silent boot)
+- Boot time: Under 10 seconds from power on to application display (branded Plymouth splash)
 - Recovery time: <30 seconds for automatic service recovery
 - Uptime: Designed for months of unattended operation
 - Font rendering: Optimized Inter + CaskaydiaCove with subpixel antialiasing
@@ -293,10 +293,12 @@ KioskBook uses a modular installation system with numbered modules executed in s
 - Create and enable kioskbook-app systemd service
 - Start application
 
-**60-boot.sh** - Silent Boot
-- Configure GRUB for completely silent boot (timeout=0, hidden, loglevel=0)
+**60-boot.sh** - Branded Boot with Plymouth
+- Install Plymouth with Route 19 branded theme
+- Configure GRUB for fast boot with Route 19 background (timeout=0, hidden, loglevel=0)
 - Configure systemd for silent startup
-- Set kernel parameters to suppress messages
+- Set kernel parameters to suppress text messages
+- Enable early KMS for AMD GPU (required for Plymouth graphics)
 - Mask verbose services
 - Configure getty for silent auto-login
 
@@ -328,14 +330,14 @@ kiosk logs -n 100
 ```
 
 **Manual validation checklist:**
-- [ ] System boots in <5 seconds with completely silent boot (black screen)
+- [ ] System boots in under 10 seconds with branded Plymouth Route 19 splash
 - [ ] Application displays full-screen automatically on port 5173
 - [ ] SSH access works (fast startup, no DNS delays)
 - [ ] Tailscale VPN connectivity established (if configured)
 - [ ] Application works offline with cached data
 - [ ] Services auto-restart on failure (systemd RestartSec=10)
 - [ ] Inter font used for UI, CaskaydiaCove for monospace
-- [ ] Completely silent boot (no kernel messages, no plymouth, just black screen)
+- [ ] Branded boot with Plymouth Route 19 theme (no kernel messages, clean logo display)
 - [ ] Automated monitoring working (`systemctl status kioskbook-recovery.timer`)
 - [ ] `kiosk` command available and all subcommands working
 

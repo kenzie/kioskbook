@@ -1,12 +1,12 @@
 # KioskBook
 
-Bulletproof kiosk deployment platform for Debian Linux. Transform any AMD-based system into a fast-booting (<5 seconds), self-recovering kiosk running Vue.js applications with professional-grade reliability.
+Bulletproof kiosk deployment platform for Debian Linux. Transform any AMD-based system into a fast-booting (under 10 seconds), self-recovering kiosk running Vue.js applications with professional-grade reliability.
 
-**Version 0.2.0** - Modular architecture with automated monitoring and recovery
+**Version 0.2.4** - Modular architecture with automated monitoring and recovery
 
 ## Features
 
-- **🚀 Ultra-Fast Boot** - Sub-5 second boot to Chromium display with silent GRUB
+- **🚀 Ultra-Fast Boot** - Under 10 second boot with branded Plymouth splash (Route 19 logo)
 - **📦 Debian 13 Base** - Minimal, stable, and reliable Trixie foundation
 - **🔧 Modular Installation** - Update individual components without full reinstall
 - **🖥️ Professional Display** - X11 + OpenBox with AMD GPU acceleration
@@ -51,7 +51,7 @@ sudo reboot
 ```
 
 System will:
-- Boot in <5 seconds (completely silent)
+- Boot in under 10 seconds with Route 19 branded Plymouth splash
 - Auto-login as kiosk user
 - Launch Chromium in full-screen kiosk mode
 - Display your Vue.js application on port 5173
@@ -94,7 +94,7 @@ sudo kiosk maintenance
 
 ## Modular Architecture
 
-KioskBook v0.2.0 uses a modular architecture for easy maintenance and selective updates:
+KioskBook v0.2.4 uses a modular architecture for easy maintenance and selective updates:
 
 ```
 kioskbook/
@@ -105,7 +105,7 @@ kioskbook/
 │   ├── 30-display.sh      # X11, OpenBox, LightDM, Chromium
 │   ├── 40-fonts.sh        # Inter, CaskaydiaCove Nerd Font
 │   ├── 50-app.sh          # Node.js, application deployment
-│   ├── 60-boot.sh         # Silent GRUB boot
+│   ├── 60-boot.sh         # Branded boot with Plymouth
 │   └── 70-services.sh     # Monitoring, recovery, maintenance
 ├── configs/                # All configuration files
 ├── bin/kiosk              # Management CLI tool
@@ -155,7 +155,26 @@ kioskbook/
 
 ## Version History
 
-### v0.2.0 (Current) - 2025-10-02
+### v0.2.4 (Current) - 2025-10-03
+- ✅ Switched from Vite dev server to production `serve` for stability
+- ✅ Enhanced kiosk CLI with short module names support (e.g., `kiosk update app`)
+- ✅ Auto-restart app service after updates
+- ✅ Fixed systemd silent boot configuration
+- ✅ Improved color rendering in CLI output
+
+### v0.2.3 - 2025-10-03
+- ✅ Added kiosk CLI installation to 70-services module
+- ✅ Fixed CLI color rendering with proper escape sequences
+
+### v0.2.2 - 2025-10-03
+- ✅ Switched to production build with `serve` package
+- ✅ Fixed JSON parsing and Chrome DevTools API integration
+
+### v0.2.1 - 2025-10-02
+- ✅ Added scheduled maintenance system
+- ✅ Plymouth theme improvements
+
+### v0.2.0 - 2025-10-02
 - ✅ Modular architecture with numbered modules
 - ✅ kiosk CLI for comprehensive system management
 - ✅ Automated monitoring and recovery every 5 minutes
@@ -174,8 +193,8 @@ kioskbook/
 
 The default application is `kenzie/lobby-display`, but any Vue.js application works. Requirements:
 
-- **Node.js/npm-based** with `npm run dev` command
-- **Port 5173** (Vite dev server default)
+- **Node.js/npm-based** with production build (`npm run build`)
+- **Port 5173** (served via `npx serve` for production stability)
 - **Full-screen compatible** for kiosk display
 - **Offline-first** with cached JSON data support
 

@@ -45,4 +45,9 @@ systemctl disable \
     ModemManager.service \
     wpa_supplicant.service 2>/dev/null || true
 
+# Disable apt-daily-upgrade timer (handled by kiosk maintenance instead)
+log_module "$module_name" "Disabling apt-daily-upgrade timer..."
+systemctl disable apt-daily-upgrade.timer 2>/dev/null || true
+systemctl stop apt-daily-upgrade.timer 2>/dev/null || true
+
 log_module_success "$module_name" "Base system configured"

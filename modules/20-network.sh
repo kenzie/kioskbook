@@ -14,6 +14,36 @@ module_name="Network & SSH"
 
 log_module "$module_name" "Starting network configuration..."
 
+# Install and configure UFW firewall
+log_module "$module_name" "Installing UFW firewall..."
+DEBIAN_FRONTEND=noninteractive apt-get install -y ufw
+
+log_module "$module_name" "Configuring UFW firewall..."
+# Set default policies
+ufw --force default deny incoming
+ufw --force default allow outgoing
+
+# Allow SSH
+ufw allow 22/tcp comment 'SSH'
+
+# Allow Tailscale interface (if it exists)
+if ip link show tailscale0 &>/dev/null; then
+    ufw allow in on tailscale0 comment 'Tailscale VPN'
+fi
+
+# Enable firewall
+ufw --force enable
+log_module "$module_name" "UFW firewall configured and enabled"
+
+# Install and configure fail2ban
+log_module "$module_name" "Installing fail2ban..."
+DEBIAN_FRONTEND=noninteractive apt-get install -y fail2ban
+
+# Enable and start fail2ban
+systemctl enable fail2ban
+systemctl start fail2ban
+log_module "$module_name" "fail2ban configured and started"
+
 # Optimize SSH configuration
 log_module "$module_name" "Optimizing SSH configuration..."
 ssh_config="/etc/ssh/sshd_config"

@@ -12,9 +12,18 @@ source "$SCRIPT_DIR/lib/common.sh"
 
 module_name="Application"
 APP_DIR="/opt/kioskbook"
+APP_USER="kioskbook-app"
 DEFAULT_REPO="https://github.com/kenzie/lobby-display"
 
 log_module "$module_name" "Starting application installation..."
+
+# Create dedicated service user if it doesn't exist
+if ! id "$APP_USER" &>/dev/null; then
+    log_module "$module_name" "Creating service user: $APP_USER"
+    useradd -r -s /bin/false -d "$APP_DIR" -c "KioskBook Application Service" "$APP_USER"
+else
+    log_module "$module_name" "Service user $APP_USER already exists"
+fi
 
 # Use provided GitHub repo or default
 GITHUB_REPO="${GITHUB_REPO:-$DEFAULT_REPO}"
@@ -55,6 +64,10 @@ npm install -g serve
 # Build production version
 log_module "$module_name" "Building production version..."
 npm run build
+
+# Set ownership to service user
+log_module "$module_name" "Setting ownership to $APP_USER..."
+chown -R "$APP_USER:$APP_USER" "$APP_DIR"
 
 # Install systemd service
 log_module "$module_name" "Installing systemd service..."

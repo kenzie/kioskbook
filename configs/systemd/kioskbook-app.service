@@ -5,7 +5,8 @@ Wants=network.target
 
 [Service]
 Type=simple
-User=root
+User=kioskbook-app
+Group=kioskbook-app
 WorkingDirectory=/opt/kioskbook/dist
 Environment=NODE_ENV=production
 ExecStart=/usr/bin/npx serve -s . -l tcp://127.0.0.1:5173
@@ -13,6 +14,13 @@ Restart=always
 RestartSec=10
 StandardOutput=journal
 StandardError=journal
+
+# Security hardening
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/kioskbook
 
 [Install]
 WantedBy=multi-user.target

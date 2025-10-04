@@ -344,6 +344,13 @@ cmd_maintenance() {
         npm ci
     fi
 
+    # Check if reboot is required
+    if [[ -f /var/run/reboot-required ]]; then
+        log_warning "System reboot required for updates to take effect"
+        log "Rebooting system..."
+        reboot
+    fi
+
     log_success "Maintenance complete"
 }
 

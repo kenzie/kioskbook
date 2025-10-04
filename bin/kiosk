@@ -347,6 +347,13 @@ cmd_maintenance() {
     # Check if reboot is required
     if [[ -f /var/run/reboot-required ]]; then
         log_warning "System reboot required for updates to take effect"
+
+        # Send notification to display if available
+        if command -v kioskbook-notify >/dev/null 2>&1; then
+            kioskbook-notify "System Maintenance" "System will reboot in 30 seconds for updates" "critical"
+            sleep 30
+        fi
+
         log "Rebooting system..."
         reboot
     fi

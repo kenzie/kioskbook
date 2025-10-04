@@ -348,11 +348,9 @@ cmd_maintenance() {
     if [[ -f /var/run/reboot-required ]]; then
         log_warning "System reboot required for updates to take effect"
 
-        # Send notification to display if available
-        if command -v kioskbook-notify >/dev/null 2>&1; then
-            kioskbook-notify "System Maintenance" "System will reboot in 30 seconds for updates" "critical"
-            sleep 30
-        fi
+        # Send notification to display
+        cmd_notify "System Maintenance" "System will reboot in 30 seconds for updates" "critical"
+        sleep 30
 
         log "Rebooting system..."
         reboot
@@ -367,6 +365,34 @@ cmd_monitor() {
         /usr/local/bin/kioskbook-monitor
     else
         log_warning "Monitoring script not installed"
+    fi
+}
+
+# Command: notify
+cmd_notify() {
+    local title="${1:-Notification}"
+    local message="${2:-}"
+    local urgency="${3:-normal}"
+
+    if [[ -z "$message" ]]; then
+        log_error "Usage: kiosk notify <title> <message> [urgency]\n  urgency: low, normal, critical (default: normal)"
+    fi
+
+    # Send notification to the kiosk display
+    if [[ "$USER" == "kiosk" ]]; then
+        # Already running as kiosk user
+        DISPLAY=:0 notify-send \
+            -u "$urgency" \
+            -a "KioskBook" \
+            "$title" \
+            "$message"
+    else
+        # Running as another user (e.g., root)
+        DISPLAY=:0 sudo -u kiosk notify-send \
+            -u "$urgency" \
+            -a "KioskBook" \
+            "$title" \
+            "$message"
     fi
 }
 
@@ -387,6 +413,7 @@ cmd_help() {
     echo -e "  ${GREEN}restart${NC} [service]    Restart services (app|display|all)"
     echo -e "  ${GREEN}maintenance${NC}          Run maintenance tasks"
     echo -e "  ${GREEN}monitor${NC}              Run monitoring check"
+    echo -e "  ${GREEN}notify${NC} <title> <msg> Send notification to display"
     echo -e "  ${GREEN}help${NC}                 Show this help message"
     echo ""
     echo -e "${YELLOW}Examples:${NC}"
@@ -439,6 +466,10 @@ main() {
             ;;
         monitor)
             cmd_monitor
+            ;;
+        notify|n)
+            shift
+            cmd_notify "$@"
             ;;
         help|--help|-h)
             cmd_help

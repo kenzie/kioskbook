@@ -147,12 +147,22 @@ if [[ -z "$MESSAGE" ]]; then
     exit 1
 fi
 
-# Send notification as kiosk user to their display
-DISPLAY=:0 sudo -u "$KIOSK_USER" notify-send \
-    -u "$URGENCY" \
-    -a "KioskBook" \
-    "$TITLE" \
-    "$MESSAGE"
+# Send notification to the kiosk display
+if [[ "$USER" == "$KIOSK_USER" ]]; then
+    # Already running as kiosk user
+    DISPLAY=:0 notify-send \
+        -u "$URGENCY" \
+        -a "KioskBook" \
+        "$TITLE" \
+        "$MESSAGE"
+else
+    # Running as another user (e.g., root)
+    DISPLAY=:0 sudo -u "$KIOSK_USER" notify-send \
+        -u "$URGENCY" \
+        -a "KioskBook" \
+        "$TITLE" \
+        "$MESSAGE"
+fi
 EOF
 
 chmod +x /usr/local/bin/kioskbook-notify

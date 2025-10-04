@@ -340,8 +340,27 @@ cmd_maintenance() {
     if [[ -d "$APP_DIR/.git" ]]; then
         log "Updating application..."
         cd "$APP_DIR"
-        git pull
-        npm ci
+
+        # Check if there are updates
+        git fetch
+        if ! git diff --quiet HEAD origin/main; then
+            # Notify users before updating
+            cmd_notify "System Maintenance" "System is applying updates" "critical"
+
+            git pull
+            npm ci
+            npm run build
+            systemctl restart kioskbook-app.service
+
+            # Dismiss notification
+            if [[ "$USER" == "kiosk" ]]; then
+                DISPLAY=:0 dunstctl close-all
+            else
+                DISPLAY=:0 sudo -u kiosk dunstctl close-all
+            fi
+
+            log_success "Application updated and restarted"
+        fi
     fi
 
     # Check if reboot is required

@@ -18,6 +18,7 @@
 : "${APP_DIR:=/opt/kioskbook}"
 : "${REPO_DIR:=/opt/kioskbook-repo}"
 : "${LOG_DIR:=/var/log/kioskbook}"
+: "${MIGRATION_VERSION_FILE:=/etc/kioskbook/migration-version}"
 : "${DEFAULT_GITHUB_REPO:=https://github.com/kenzie/lobby-display}"
 
 # Logging functions
@@ -131,8 +132,97 @@ run_module() {
     log_success "Module $module_name completed successfully"
 }
 
+# Migration logging
+log_migration() {
+    local migration_name=$(basename "${1:-unknown}")
+    local message="$2"
+    printf "${MAGENTA}[MIGRATION ${migration_name}]${NC} %s\n" "$message"
+}
+
+# Get last applied migration version
+get_migration_version() {
+    if [[ -f "$MIGRATION_VERSION_FILE" ]]; then
+        cat "$MIGRATION_VERSION_FILE"
+    else
+        echo "00000000"  # No migrations applied yet
+    fi
+}
+
+# Get list of pending migrations
+get_pending_migrations() {
+    local migrations_dir="${1:-migrations}"
+    local last_version=$(get_migration_version)
+
+    # Find all migration files newer than last version
+    find "$migrations_dir" -name "[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]_*.sh" 2>/dev/null | sort | while read migration; do
+        local migration_name=$(basename "$migration")
+        local migration_version="${migration_name%%_*}"
+
+        if [[ "$migration_version" > "$last_version" ]]; then
+            echo "$migration"
+        fi
+    done
+}
+
+# Run a single migration
+run_migration() {
+    local migration_path="$1"
+    local migration_name=$(basename "$migration_path")
+    local migration_version="${migration_name%%_*}"
+
+    log_migration "$migration_name" "Starting migration..."
+
+    if [[ ! -f "$migration_path" ]]; then
+        log_error "Migration not found: $migration_path"
+    fi
+
+    if [[ ! -x "$migration_path" ]]; then
+        chmod +x "$migration_path"
+    fi
+
+    bash "$migration_path"
+    local exit_code=$?
+
+    if [[ $exit_code -ne 0 ]]; then
+        log_error "Migration $migration_name failed with exit code $exit_code"
+    fi
+
+    log_migration "$migration_name" "Migration completed successfully"
+
+    # Update migration version
+    mkdir -p "$(dirname "$MIGRATION_VERSION_FILE")"
+    echo "$migration_version" > "$MIGRATION_VERSION_FILE"
+}
+
+# Run all pending migrations
+run_pending_migrations() {
+    local migrations_dir="${1:-migrations}"
+
+    if [[ ! -d "$migrations_dir" ]]; then
+        log_warning "No migrations directory found at $migrations_dir"
+        return 0
+    fi
+
+    local pending_migrations=($(get_pending_migrations "$migrations_dir"))
+
+    if [[ ${#pending_migrations[@]} -eq 0 ]]; then
+        log "No pending migrations"
+        return 0
+    fi
+
+    log "Found ${#pending_migrations[@]} pending migration(s)"
+
+    for migration in "${pending_migrations[@]}"; do
+        run_migration "$migration"
+    done
+
+    log_success "All pending migrations completed"
+}
+
 # Export functions for use in subshells
 export -f log log_success log_warning log_error
 export -f log_module log_module_success log_module_warning log_module_error
+export -f log_migration
 export -f show_banner require_root require_debian require_network ensure_log_dir
 export -f get_modules run_module
+export -f get_migration_version get_pending_migrations run_migration run_pending_migrations

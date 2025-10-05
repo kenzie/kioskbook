@@ -146,6 +146,19 @@ main() {
         log "Installed version: $(cat /etc/kioskbook/version)"
     fi
 
+    # Initialize migration tracking (fresh install = all migrations already applied)
+    log "Initializing migration tracking..."
+    # Get the latest migration date if any exist
+    latest_migration=$(find "$SCRIPT_DIR/migrations" -name "[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]_*.sh" 2>/dev/null | sort | tail -1)
+    if [[ -n "$latest_migration" ]]; then
+        migration_version=$(basename "$latest_migration" | cut -d'_' -f1)
+        echo "$migration_version" > /etc/kioskbook/migration-version
+        log "Migration version set to: $migration_version (fresh install, all migrations already applied)"
+    else
+        echo "99999999" > /etc/kioskbook/migration-version
+        log "No migrations found, migration version set to: 99999999"
+    fi
+
     # Copy repository to system location for module updates
     log "Installing repository to $REPO_DIR for module updates..."
     if [[ -d "$REPO_DIR" ]]; then

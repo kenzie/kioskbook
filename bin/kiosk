@@ -247,6 +247,11 @@ cmd_update() {
     if [[ "$module_name" == "all" ]]; then
         log "Updating all modules..."
 
+        # Run pending migrations first
+        log "Checking for pending migrations..."
+        run_pending_migrations "$REPO_DIR/migrations"
+
+        # Then run all modules
         for module in $(find "$REPO_DIR/modules" -name "[0-9][0-9]-*.sh" | sort); do
             log "Running module: $(basename "$module")"
             bash "$module"

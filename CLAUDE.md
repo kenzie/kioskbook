@@ -39,6 +39,9 @@ kioskbook/
 │   ├── 50-app.sh          # Node.js, application deployment
 │   ├── 60-boot.sh         # Silent boot configuration
 │   └── 70-services.sh     # Monitoring, recovery, maintenance
+├── migrations/             # One-time state transition scripts
+│   ├── README.md          # Migration system documentation
+│   └── YYYYMMDD_*.sh      # Date-stamped migration scripts
 ├── configs/                # Configuration files (no heredocs in scripts)
 │   ├── systemd/           # systemd service files
 │   ├── openbox/           # OpenBox autostart
@@ -71,13 +74,102 @@ kioskbook/
 ### Key Design Principles
 
 1. **Modular Installation**: Numbered modules (10, 20, 30...) for clean separation and selective updates
-2. **Fast Boot**: Under 10 second boot time with branded Plymouth splash (Route 19 logo)
-3. **Self-Recovery**: Multi-layer recovery (service, application, system level) with automatic monitoring
-4. **Offline-First**: Must work without network using cached JSON data
-5. **Minimal Surface**: Debian minimal installation for security and performance
-6. **Unattended Operation**: Designed for months without physical access
-7. **Branded Boot**: Plymouth splash with Route 19 logo, no kernel text messages
-8. **Local Development**: Test module updates on live system from local repo before committing
+2. **Migration System**: Separate one-time migrations from repeatable modules for clean state transitions
+3. **Fast Boot**: Under 10 second boot time with branded Plymouth splash (Route 19 logo)
+4. **Self-Recovery**: Multi-layer recovery (service, application, system level) with automatic monitoring
+5. **Offline-First**: Must work without network using cached JSON data
+6. **Minimal Surface**: Debian minimal installation for security and performance
+7. **Unattended Operation**: Designed for months without physical access
+8. **Branded Boot**: Plymouth splash with Route 19 logo, no kernel text messages
+9. **Local Development**: Test module updates on live system from local repo before committing
+
+### Migration System
+
+KioskBook separates concerns between **modules** (target state) and **migrations** (state transitions):
+
+**Modules** (`modules/`)
+- Describe the **desired target state** of the system
+- Should be **idempotent** (safe to run multiple times)
+- Run on both fresh installs and updates
+- Example: "Install Chromium and configure kiosk mode"
+
+**Migrations** (`migrations/`)
+- Handle **one-time state transitions** between versions
+- Clean up deprecated artifacts that modules can't know about
+- Run only on updates (skipped on fresh installs)
+- Example: "Remove old screensaver service that was replaced by notifications"
+
+**Why This Matters:**
+
+Without migrations, modules would need logic like:
+```bash
+# BAD: Module has to know about old state
+if systemctl exists old-screensaver; then
+    remove old-screensaver
+fi
+install new-notification-system
+```
+
+With migrations:
+```bash
+# GOOD: Migration handles cleanup once
+# migrations/20250104_remove_screensaver.sh
+systemctl stop old-screensaver
+rm /etc/systemd/system/old-screensaver.service
+
+# Module stays pure - just target state
+# modules/35-notifications.sh
+install new-notification-system
+```
+
+**Migration Naming:**
+
+Migrations use date-based naming (`YYYYMMDD_description.sh`) to:
+- Avoid merge conflicts when multiple developers create migrations
+- Show chronological order at a glance
+- Enable merge-safe parallel development
+
+**How Fresh Installs Work:**
+
+1. `install.sh` runs all modules → creates target state
+2. Finds latest migration: `20250104_remove_screensaver.sh`
+3. Sets `/etc/kioskbook/migration-version` to `20250104`
+4. Result: Migrations treated as "already applied" (nothing to clean up on fresh install)
+
+**How Updates Work:**
+
+1. `kiosk update all` reads `/etc/kioskbook/migration-version` → `20241215`
+2. Finds pending migrations newer than `20241215`
+3. Runs migrations in chronological order → cleans up old artifacts
+4. Runs modules → ensures target state
+5. Updates migration version to latest
+
+**Creating a Migration:**
+
+```bash
+# Create migration with today's date
+vim migrations/$(date +%Y%m%d)_remove_old_service.sh
+chmod +x migrations/$(date +%Y%m%d)_remove_old_service.sh
+
+# Test on dev kiosk
+sudo bash migrations/$(date +%Y%m%d)_remove_old_service.sh
+
+# Commit when confirmed working
+git add migrations/$(date +%Y%m%d)_remove_old_service.sh
+git commit -m "Add migration to remove old service"
+
+# Deploy to production
+sudo kiosk update all  # Runs migrations, then modules
+```
+
+**Best Practices:**
+
+- **Idempotent**: Migrations should be safe to run multiple times (check before deleting)
+- **Documented**: Include comments explaining why the migration exists
+- **Tested**: Test on dev system before deploying to production
+- **Logged**: Use `log_migration` function for clear output
+
+See `migrations/README.md` for detailed migration documentation.
 
 ## Common Commands
 

@@ -9,8 +9,8 @@ xset s noblank
 
 # Load display configuration
 DISPLAY_CONFIG="/etc/kioskbook/display.conf"
-if [[ -f "$DISPLAY_CONFIG" ]]; then
-    source "$DISPLAY_CONFIG"
+if [ -f "$DISPLAY_CONFIG" ]; then
+    . "$DISPLAY_CONFIG"
 else
     # Fallback to default
     DISPLAY_URL="https://kioskbook.ca/display"

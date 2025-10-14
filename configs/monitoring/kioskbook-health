@@ -5,14 +5,6 @@ echo "=== KioskBook Health Check ==="
 echo "Date: $(date)"
 echo
 
-# Check application service
-echo "Application Service:"
-if systemctl is-active kioskbook-app >/dev/null 2>&1; then
-    echo "✅ Active"
-else
-    echo "❌ Application not running"
-fi
-
 # Check display
 echo "Display:"
 if pgrep -f "chromium.*kiosk" >/dev/null; then

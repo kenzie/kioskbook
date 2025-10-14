@@ -7,12 +7,23 @@ xset s off
 xset -dpms
 xset s noblank
 
-# Wait for application to be ready (Vite dev server runs on 5173)
-while ! curl -s http://localhost:5173 >/dev/null 2>&1; do
-    sleep 1
-done
+# Load display configuration
+DISPLAY_CONFIG="/etc/kioskbook/display.conf"
+if [[ -f "$DISPLAY_CONFIG" ]]; then
+    source "$DISPLAY_CONFIG"
+else
+    # Fallback to default
+    DISPLAY_URL="https://kioskbook.ca/display"
+    DISPLAY_TOKEN="YOUR_TOKEN_HERE"
+fi
 
-# Start Chromium in kiosk mode with font optimization
+# Build full URL with token
+KIOSK_URL="${DISPLAY_URL}?token=${DISPLAY_TOKEN}"
+
+# Wait a moment for network to be ready
+sleep 2
+
+# Start Chromium in kiosk mode with font optimization and crash recovery
 exec chromium \
     --kiosk \
     --no-sandbox \
@@ -29,4 +40,6 @@ exec chromium \
     --start-fullscreen \
     --force-device-scale-factor=1 \
     --font-render-hinting=none \
-    http://localhost:5173
+    --disable-session-crashed-bubble \
+    --disable-restore-session-state \
+    "$KIOSK_URL"

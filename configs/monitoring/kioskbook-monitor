@@ -4,6 +4,7 @@
 LOG_FILE="/var/log/kioskbook/monitor.log"
 MAX_MEMORY_MB=2048
 MAX_LOAD=5.0
+DISPLAY_CONFIG="/etc/kioskbook/display.conf"
 
 log_monitor() {
     echo "$(date): $1" >> "$LOG_FILE"
@@ -39,11 +40,24 @@ check_chromium() {
     return 0
 }
 
-# Check if application is responding
+# Check if display URL is accessible (network connectivity and service worker)
 check_application() {
-    if ! curl -s --max-time 5 http://localhost:5173 >/dev/null; then
-        log_monitor "RECOVERY: Application not responding, restarting service"
-        systemctl restart kioskbook-app
+    # Load display configuration
+    if [[ -f "$DISPLAY_CONFIG" ]]; then
+        source "$DISPLAY_CONFIG"
+    else
+        log_monitor "WARNING: Display config not found at $DISPLAY_CONFIG"
+        return 0  # Don't fail if config doesn't exist yet
+    fi
+
+    # Build URL with token
+    local check_url="${DISPLAY_URL}?token=${DISPLAY_TOKEN}"
+
+    # Check if URL is accessible
+    if ! curl -s --max-time 10 "$check_url" >/dev/null; then
+        log_monitor "WARNING: Display URL not accessible: $DISPLAY_URL"
+        # Don't restart anything - this is an external service
+        # Just log the issue for monitoring
         return 1
     fi
     return 0
@@ -53,13 +67,15 @@ check_application() {
 main() {
     mkdir -p "$(dirname "$LOG_FILE")"
 
-    check_memory
-    check_load
-    check_chromium
-    check_application
+    local all_healthy=true
+
+    check_memory || all_healthy=false
+    check_load || all_healthy=false
+    check_chromium || all_healthy=false
+    check_application || all_healthy=false
 
     # Log success if all checks pass
-    if [[ $? -eq 0 ]]; then
+    if [[ "$all_healthy" == true ]]; then
         log_monitor "All systems healthy"
     fi
 }

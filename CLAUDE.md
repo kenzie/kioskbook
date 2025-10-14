@@ -63,8 +63,7 @@ kioskbook/
 - **Window Manager**: OpenBox (minimal, lightweight)
 - **Display Manager**: LightDM with auto-login
 - **Browser**: Chromium in kiosk mode (full-screen, no UI elements)
-- **Runtime**: Node.js 20.x + npm
-- **Application**: Vue.js web application (production build served on port 5173 via `npx serve`)
+- **Application**: External web service at https://kioskbook.ca/display with service worker for offline caching
 - **Remote Access**: Tailscale VPN + SSH (optimized for fast startup)
 - **Boot**: GRUB + Plymouth with Route 19 branded theme (silent with logo)
 - **Fonts**: Inter (UI) + CaskaydiaCove Nerd Font (monospace)
@@ -180,7 +179,10 @@ See `migrations/README.md` for detailed migration documentation.
 
 git clone https://github.com/kenzie/kioskbook.git
 cd kioskbook
-sudo ./install.sh [github_repo] [tailscale_key]
+sudo ./install.sh [display_token] [tailscale_key]
+
+# Or use the web installer:
+curl -fsSL https://kioskbook.ca/install.sh | sudo bash
 
 # After installation completes:
 sudo reboot
@@ -229,19 +231,24 @@ sudo kiosk maintenance
 
 # Run monitoring check
 sudo kiosk monitor
+
+# View display configuration
+cat /etc/kioskbook/display.conf
+
+# Edit display URL or token
+sudo vim /etc/kioskbook/display.conf
+sudo kiosk restart display
 ```
 
 ### Direct systemd Management
 ```bash
 # Check service status
-systemctl status kioskbook-app
 systemctl status lightdm
 
 # View logs
-journalctl -u kioskbook-app -f
+journalctl -u lightdm -f
 
-# Restart services
-systemctl restart kioskbook-app
+# Restart display service
 systemctl restart lightdm
 ```
 
@@ -305,33 +312,42 @@ Use UTM or VirtualBox with Debian 13.1.0 netinst. Match Lenovo M75q-1 specs:
 
 ## Application Integration
 
-The kiosk system is designed to run Vue.js applications. Default application repository is `kenzie/lobby-display`, but this is configurable during installation.
+The kiosk system displays an external web service (https://kioskbook.ca/display) with token-based authentication.
 
-**Application Requirements:**
-- Must be a Node.js/npm-based application
-- Should support full-screen display
-- Must handle offline operation with cached JSON data
-- Should be compatible with Chromium kiosk mode
+**Application Architecture:**
+- External web service with service worker for offline caching
+- Token-based authentication via URL parameter (?token=ABCD-1234)
+- Offline-first design using service worker cache
+- Full-screen display in Chromium kiosk mode
+- No local Node.js installation required
+- Application updates handled by external service (no kiosk updates needed)
+
+**Display Configuration:**
+- URL and token stored in /etc/kioskbook/display.conf
+- Configurable during installation or via manual edit
+- Restart display service to apply changes: `kiosk restart display`
 
 ## Recovery Architecture
 
 ### Multi-Layer Recovery
-1. **Service-level**: Automatic restart of failed services (systemd with RestartSec=10)
-2. **Application-level**: Browser and Node.js monitoring via kioskbook-monitor
+1. **Service-level**: Automatic restart of display service if Chromium crashes
+2. **Browser-level**: Chromium process monitoring via kioskbook-monitor
 3. **System-level**: Automated recovery checks every 5 minutes via systemd timer
-4. **Manual recovery**: `kiosk restart` command for manual intervention
+4. **Manual recovery**: `kiosk restart display` command for manual intervention
 
 ### Automated Monitoring (70-services module)
 - **kioskbook-monitor** script runs every 5 minutes
-- Checks: Memory usage, CPU load, Chromium process, application HTTP response
-- Auto-recovery: Restarts lightdm if Chromium dies, restarts kioskbook-app if HTTP fails
+- Checks: Memory usage, CPU load, Chromium process, display URL accessibility
+- Auto-recovery: Restarts lightdm if Chromium dies
+- Network monitoring: Checks external display URL for connectivity (logs warnings, doesn't restart)
 - Logging: All recovery actions logged to /var/log/kioskbook/monitor.log
 
 ### Scheduled Maintenance
 - **Daily** (3 AM): General maintenance via `kiosk maintenance`
 - **Weekly** (Sunday 2 AM): System updates via `kiosk update all`
-- **Weekly** (Sunday 4 AM): Service restarts after updates
+- **Weekly** (Sunday 4 AM): Display service restart after updates
 - **Daily** (1 AM): Journal log cleanup (7-day retention)
+- **Note**: Application updates handled by external service (no local updates needed)
 
 ### Remote Management
 - SSH access for diagnostics (optimized for fast startup)
@@ -378,12 +394,11 @@ KioskBook uses a modular installation system with numbered modules executed in s
 - Configure fontconfig to prioritize Inter for sans-serif
 - Update font cache
 
-**50-app.sh** - Application
-- Install Node.js 20 from NodeSource
-- Clone application repository
-- Install npm dependencies
-- Create and enable kioskbook-app systemd service
-- Start application
+**50-app.sh** - Display Configuration
+- Create /etc/kioskbook/display.conf with URL and token
+- Configure display URL (default: https://kioskbook.ca/display)
+- Store authorization token for URL access
+- No application deployment needed (external service)
 
 **60-boot.sh** - Branded Boot with Plymouth
 - Install Plymouth with Route 19 branded theme
@@ -423,11 +438,12 @@ kiosk logs -n 100
 
 **Manual validation checklist:**
 - [ ] System boots in under 10 seconds with branded Plymouth Route 19 splash
-- [ ] Application displays full-screen automatically on port 5173
+- [ ] Display URL loads full-screen automatically in Chromium
+- [ ] Display configuration exists at /etc/kioskbook/display.conf
 - [ ] SSH access works (fast startup, no DNS delays)
 - [ ] Tailscale VPN connectivity established (if configured)
-- [ ] Application works offline with cached data
-- [ ] Services auto-restart on failure (systemd RestartSec=10)
+- [ ] Display works offline with service worker cache
+- [ ] Chromium auto-restarts on crash (lightdm restarts)
 - [ ] Inter font used for UI, CaskaydiaCove for monospace
 - [ ] Branded boot with Plymouth Route 19 theme (no kernel messages, clean logo display)
 - [ ] Automated monitoring working (`systemctl status kioskbook-recovery.timer`)

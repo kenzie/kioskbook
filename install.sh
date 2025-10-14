@@ -5,11 +5,10 @@
 # Transforms a minimal Debian installation into a bulletproof kiosk system.
 # Run this after installing Debian 13.1.0 netinst with SSH server only.
 #
-# Usage: sudo ./install.sh [github_repo] [tailscale_key]
+# Usage: sudo ./install.sh [display_token] [tailscale_key]
 #
 # Arguments:
-#   github_repo  - GitHub repository URL for the kiosk application (optional)
-#                  Default: https://github.com/kenzie/lobby-display
+#   display_token - Authorization token for kioskbook.ca display service (optional)
 #   tailscale_key - Tailscale auth key for VPN access (optional)
 #
 
@@ -34,16 +33,25 @@ trap 'cleanup $LINENO' ERR
 get_configuration() {
     log "Configuration"
 
-    # GitHub repository
+    # Display URL (default to kioskbook.ca)
+    DISPLAY_URL="${DEFAULT_DISPLAY_URL}"
+    export DISPLAY_URL
+    log "Display URL: $DISPLAY_URL"
+
+    # Display token
     if [[ -n "${1:-}" ]]; then
-        GITHUB_REPO="$1"
+        DISPLAY_TOKEN="$1"
     else
-        echo -n "GitHub repository (default: $DEFAULT_GITHUB_REPO): "
-        read -r GITHUB_REPO
-        GITHUB_REPO="${GITHUB_REPO:-$DEFAULT_GITHUB_REPO}"
+        echo -n "Display authorization token: "
+        read -r DISPLAY_TOKEN
     fi
-    export GITHUB_REPO
-    log "Using repository: $GITHUB_REPO"
+
+    if [[ -z "$DISPLAY_TOKEN" ]]; then
+        log_error "Display token is required"
+    fi
+
+    export DISPLAY_TOKEN
+    log "Display token configured"
 
     # Tailscale key (optional)
     if [[ -n "${2:-}" ]]; then
@@ -75,23 +83,28 @@ show_completion() {
     echo -e "${GREEN}═══════════════════════════════════════════════════════${NC}"
 
     echo -e "\n${CYAN}System Status:${NC}"
-    if systemctl is-active --quiet kioskbook-app; then
-        echo -e "  ✅ Application service running"
+    if systemctl is-active --quiet lightdm; then
+        echo -e "  ✅ Display service running"
     else
-        echo -e "  ⚠️  Application service needs attention"
+        echo -e "  ⚠️  Display service needs attention"
+    fi
+
+    if [[ -f /etc/kioskbook/display.conf ]]; then
+        source /etc/kioskbook/display.conf
+        echo -e "  ✅ Display URL configured: ${DISPLAY_URL}"
     fi
 
     echo -e "\n${CYAN}Next Steps:${NC}"
     echo -e "1. Reboot system: ${YELLOW}sudo reboot${NC}"
-    echo -e "2. System will auto-login and start kiosk display"
-    echo -e "3. Check health: ${YELLOW}sudo kioskbook-health${NC}"
+    echo -e "2. System will auto-login and display kiosk URL"
+    echo -e "3. Check status: ${YELLOW}kiosk status${NC}"
 
     echo -e "\n${CYAN}The system now has:${NC}"
     echo -e "  ✅ Debian base system optimized for kiosk"
     echo -e "  ✅ X11 + OpenBox minimal window manager"
     echo -e "  ✅ Chromium browser in kiosk mode"
     echo -e "  ✅ Auto-login configured"
-    echo -e "  ✅ Vue.js application running"
+    echo -e "  ✅ Display URL configured with token"
     echo -e "  ✅ Silent boot configured"
     echo -e "  ✅ Monitoring and automatic recovery"
     if [[ -n "${TAILSCALE_KEY:-}" ]]; then
@@ -101,13 +114,13 @@ show_completion() {
     echo -e "\n${CYAN}Management Commands:${NC}"
     echo -e "  Status: ${YELLOW}kiosk status${NC}"
     echo -e "  Health: ${YELLOW}kiosk health${NC}"
-    echo -e "  Logs: ${YELLOW}kiosk logs${NC}"
+    echo -e "  Logs: ${YELLOW}kiosk logs display${NC}"
     echo -e "  Update module: ${YELLOW}kiosk update <module-name>${NC}"
+    echo -e "  Restart display: ${YELLOW}kiosk restart display${NC}"
 
-    echo -e "\n${CYAN}Module Updates (for development):${NC}"
-    echo -e "  List modules: ${YELLOW}kiosk modules${NC}"
-    echo -e "  Update specific: ${YELLOW}kiosk update 30-display${NC}"
-    echo -e "  Update all: ${YELLOW}kiosk update all${NC}"
+    echo -e "\n${CYAN}Display Configuration:${NC}"
+    echo -e "  Config file: ${GREEN}/etc/kioskbook/display.conf${NC}"
+    echo -e "  Edit to change URL or token, then: ${YELLOW}kiosk restart display${NC}"
 }
 
 # Main installation

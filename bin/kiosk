@@ -9,9 +9,8 @@ set -euo pipefail
 
 # Configuration
 readonly REPO_DIR="/opt/kioskbook-repo"
-readonly APP_DIR="/opt/kioskbook"
 readonly VERSION_FILE="/etc/kioskbook/version"
-readonly KIOSKBOOK_SERVICE="kioskbook-app.service"
+readonly DISPLAY_CONFIG="/etc/kioskbook/display.conf"
 readonly DISPLAY_SERVICE="lightdm.service"
 
 # Colors (using $'...' syntax for proper escape sequence interpretation)
@@ -74,12 +73,13 @@ cmd_version() {
 cmd_status() {
     echo -e "${CYAN}KioskBook System Status${NC}\n"
 
-    # Application service
-    echo -n "Application Service: "
-    if systemctl is-active --quiet "$KIOSKBOOK_SERVICE"; then
-        echo -e "${GREEN}✅ Running${NC}"
+    # Display configuration
+    if [[ -f "$DISPLAY_CONFIG" ]]; then
+        source "$DISPLAY_CONFIG"
+        echo -e "Display URL: ${GREEN}${DISPLAY_URL}${NC}"
+        echo -e "Token configured: ${GREEN}✅${NC}\n"
     else
-        echo -e "${RED}❌ Stopped${NC}"
+        echo -e "Display Config: ${RED}❌ Not configured${NC}\n"
     fi
 
     # Display service
@@ -125,12 +125,15 @@ cmd_status() {
     # Memory
     echo -e "Memory Usage: $(free -m | awk '/^Mem:/ {printf "%dMB/%dMB (%d%%)", $3, $2, ($3/$2*100)}')"
 
-    # Application port check
-    echo -n "Application Port (5173): "
-    if curl -s --max-time 2 http://localhost:5173 >/dev/null 2>&1; then
-        echo -e "${GREEN}✅ Responding${NC}"
-    else
-        echo -e "${RED}❌ Not responding${NC}"
+    # Display URL check (if configured)
+    if [[ -f "$DISPLAY_CONFIG" ]]; then
+        source "$DISPLAY_CONFIG"
+        echo -n "Display URL Accessible: "
+        if curl -s --max-time 5 "${DISPLAY_URL}?token=${DISPLAY_TOKEN}" >/dev/null 2>&1; then
+            echo -e "${GREEN}✅ Responding${NC}"
+        else
+            echo -e "${RED}❌ Not responding${NC}"
+        fi
     fi
 }
 
@@ -152,14 +155,20 @@ cmd_health() {
         echo -e "\n${CYAN}Detailed System Information${NC}"
         echo -e "Kernel: $(uname -r)"
         echo -e "OS: $(cat /etc/os-release | grep PRETTY_NAME | cut -d'"' -f2)"
-        echo -e "Node.js: $(node --version 2>/dev/null || echo 'Not installed')"
-        echo -e "npm: $(npm --version 2>/dev/null || echo 'Not installed')"
+        echo -e "Chromium: $(chromium --version 2>/dev/null || echo 'Not installed')"
 
         echo -e "\n${CYAN}Disk Usage${NC}"
         df -h / | tail -1 | awk '{print "Root: "$3"/"$2" ("$5" used)"}'
 
-        echo -e "\n${CYAN}Service Status${NC}"
-        systemctl status "$KIOSKBOOK_SERVICE" --no-pager -l | head -10
+        echo -e "\n${CYAN}Display Service Status${NC}"
+        systemctl status "$DISPLAY_SERVICE" --no-pager -l | head -10
+
+        if [[ -f "$DISPLAY_CONFIG" ]]; then
+            echo -e "\n${CYAN}Display Configuration${NC}"
+            source "$DISPLAY_CONFIG"
+            echo -e "URL: $DISPLAY_URL"
+            echo -e "Token: ${DISPLAY_TOKEN:0:8}... (redacted)"
+        fi
     fi
 }
 
@@ -167,7 +176,10 @@ cmd_health() {
 cmd_logs() {
     local follow=false
     local lines=50
+    local service="${1:-display}"
 
+    # Parse options
+    shift 2>/dev/null || true
     while [[ $# -gt 0 ]]; do
         case "$1" in
             -f|--follow)
@@ -184,11 +196,28 @@ cmd_logs() {
         esac
     done
 
-    if [[ "$follow" == true ]]; then
-        journalctl -u "$KIOSKBOOK_SERVICE" -f
-    else
-        journalctl -u "$KIOSKBOOK_SERVICE" -n "$lines" --no-pager
-    fi
+    # Show display service logs (LightDM) or monitoring logs
+    case "$service" in
+        monitor|monitoring)
+            local monitor_log="/var/log/kioskbook/monitor.log"
+            if [[ -f "$monitor_log" ]]; then
+                if [[ "$follow" == true ]]; then
+                    tail -f "$monitor_log"
+                else
+                    tail -n "$lines" "$monitor_log"
+                fi
+            else
+                log_warning "Monitor log not found at $monitor_log"
+            fi
+            ;;
+        display|*)
+            if [[ "$follow" == true ]]; then
+                journalctl -u "$DISPLAY_SERVICE" -f
+            else
+                journalctl -u "$DISPLAY_SERVICE" -n "$lines" --no-pager
+            fi
+            ;;
+    esac
 }
 
 # Command: modules
@@ -297,27 +326,16 @@ cmd_update() {
 cmd_restart() {
     require_root
 
-    local service="${1:-all}"
+    local service="${1:-display}"
 
     case "$service" in
-        app|application)
-            log "Restarting application service..."
-            systemctl restart "$KIOSKBOOK_SERVICE"
-            log_success "Application restarted"
-            ;;
-        display)
+        display|all)
             log "Restarting display service..."
             systemctl restart "$DISPLAY_SERVICE"
-            log_success "Display restarted"
-            ;;
-        all)
-            log "Restarting all services..."
-            systemctl restart "$KIOSKBOOK_SERVICE"
-            systemctl restart "$DISPLAY_SERVICE"
-            log_success "All services restarted"
+            log_success "Display restarted (this will reload Chromium with the configured URL)"
             ;;
         *)
-            log_error "Usage: kiosk restart [app|display|all]"
+            log_error "Usage: kiosk restart [display]"
             ;;
     esac
 }
@@ -342,32 +360,8 @@ cmd_maintenance() {
     log "Cleaning old journal logs..."
     journalctl --vacuum-time=7d
 
-    # Update application
-    if [[ -d "$APP_DIR/.git" ]]; then
-        log "Updating application..."
-        cd "$APP_DIR"
-
-        # Check if there are updates
-        git fetch
-        if ! git diff --quiet HEAD origin/main; then
-            # Notify users before updating
-            cmd_notify "System Maintenance" "System is applying updates" "critical"
-
-            git pull
-            npm ci
-            npm run build
-            systemctl restart kioskbook-app.service
-
-            # Dismiss notification
-            if [[ "$USER" == "kiosk" ]]; then
-                DISPLAY=:0 dunstctl close-all
-            else
-                DISPLAY=:0 sudo -u kiosk dunstctl close-all
-            fi
-
-            log_success "Application updated and restarted"
-        fi
-    fi
+    # Note: With URL-based display, the external service handles application updates
+    # No local application updates needed
 
     # Check if reboot is required
     if [[ -f /var/run/reboot-required ]]; then
@@ -432,10 +426,10 @@ cmd_help() {
     echo -e "  ${GREEN}version${NC}              Show installed version"
     echo -e "  ${GREEN}status${NC}               Show system status"
     echo -e "  ${GREEN}health${NC} [--detailed] Run health check"
-    echo -e "  ${GREEN}logs${NC} [-f] [-n NUM]  View application logs"
+    echo -e "  ${GREEN}logs${NC} [display|monitor] [-f] [-n NUM]  View logs"
     echo -e "  ${GREEN}modules${NC}              List available modules"
     echo -e "  ${GREEN}update${NC} <module|all> Update specific module or all"
-    echo -e "  ${GREEN}restart${NC} [service]    Restart services (app|display|all)"
+    echo -e "  ${GREEN}restart${NC} [display]    Restart display service"
     echo -e "  ${GREEN}maintenance${NC}          Run maintenance tasks"
     echo -e "  ${GREEN}monitor${NC}              Run monitoring check"
     echo -e "  ${GREEN}notify${NC} <title> <msg> Send notification to display"
@@ -444,11 +438,17 @@ cmd_help() {
     echo -e "${YELLOW}Examples:${NC}"
     echo "  kiosk status"
     echo "  kiosk health --detailed"
-    echo "  kiosk logs -f"
+    echo "  kiosk logs display -f"
+    echo "  kiosk logs monitor"
     echo "  kiosk update 30-display"
     echo "  kiosk update all"
-    echo "  kiosk restart app"
+    echo "  kiosk restart display"
     echo "  kiosk maintenance"
+    echo ""
+    echo -e "${YELLOW}Display Configuration:${NC}"
+    echo -e "  Config file: ${GREEN}/etc/kioskbook/display.conf${NC}"
+    echo -e "  Edit to change display URL or token"
+    echo -e "  After changes: ${GREEN}kiosk restart display${NC}"
     echo ""
     echo -e "${YELLOW}Version Management:${NC}"
     echo -e "  Use ${GREEN}kiosk version${NC} to check for updates"

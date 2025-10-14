@@ -15,11 +15,10 @@
 # Common configuration (only define if not already set)
 : "${KIOSK_USER:=kiosk}"
 : "${KIOSK_HOME:=/home/kiosk}"
-: "${APP_DIR:=/opt/kioskbook}"
 : "${REPO_DIR:=/opt/kioskbook-repo}"
 : "${LOG_DIR:=/var/log/kioskbook}"
 : "${MIGRATION_VERSION_FILE:=/etc/kioskbook/migration-version}"
-: "${DEFAULT_GITHUB_REPO:=https://github.com/kenzie/lobby-display}"
+: "${DEFAULT_DISPLAY_URL:=https://kioskbook.ca/display}"
 
 # Logging functions
 log() {

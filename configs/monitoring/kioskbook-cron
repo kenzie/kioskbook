@@ -14,5 +14,5 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 # Clean old logs daily at 1 AM
 0 1 * * * root journalctl --vacuum-time=7d
 
-# Restart services weekly on Sunday at 4 AM (after updates)
-0 4 * * 0 root /usr/local/bin/kiosk restart
+# Restart display service daily at 4 AM (after maintenance, for service worker refresh)
+0 4 * * * root /usr/local/bin/kiosk restart display

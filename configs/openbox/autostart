@@ -43,7 +43,6 @@ exec chromium \
     --font-render-hinting=none \
     --disable-session-crashed-bubble \
     --disable-restore-session-state \
-    --use-gl=desktop \
     --enable-gpu-rasterization \
     --ignore-gpu-blocklist \
     "$KIOSK_URL"

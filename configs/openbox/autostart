@@ -31,8 +31,8 @@ exec chromium \
     --kiosk \
     --no-sandbox \
     --disable-infobars \
-    --disable-features=TranslateUI \
-    --enable-features=VaapiVideoDecoder,VaapiVideoEncoder \
+    --disable-features=TranslateUI,UseChromeOSDirectVideoDecoder \
+    --enable-features=VaapiVideoDecoder,VaapiVideoEncoder,VaapiVideoDecodeLinuxGL \
     --disable-ipc-flooding-protection \
     --no-first-run \
     --fast \
@@ -48,4 +48,5 @@ exec chromium \
     --disable-restore-session-state \
     --enable-gpu-rasterization \
     --ignore-gpu-blocklist \
+    --disable-gpu-driver-bug-workarounds \
     "$KIOSK_URL"

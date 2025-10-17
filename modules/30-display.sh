@@ -24,6 +24,7 @@ DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
     lightdm \
     xserver-xorg-video-amdgpu \
     mesa-vulkan-drivers \
+    mesa-va-drivers \
     vainfo \
     unclutter-xfixes
 

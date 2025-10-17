@@ -23,6 +23,9 @@ KIOSK_URL="${DISPLAY_URL}?token=${DISPLAY_TOKEN}"
 # Wait a moment for network to be ready
 sleep 2
 
+# Set VA-API driver for hardware video acceleration
+export LIBVA_DRIVER_NAME=radeonsi
+
 # Start Chromium in kiosk mode with font optimization and hardware acceleration
 exec chromium \
     --kiosk \

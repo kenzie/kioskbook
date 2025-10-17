@@ -25,6 +25,7 @@ sleep 2
 
 # Set VA-API driver for hardware video acceleration
 export LIBVA_DRIVER_NAME=radeonsi
+export LIBVA_MESSAGING_LEVEL=2
 
 # Start Chromium in kiosk mode with font optimization and hardware acceleration
 exec chromium \
@@ -49,4 +50,6 @@ exec chromium \
     --enable-gpu-rasterization \
     --ignore-gpu-blocklist \
     --disable-gpu-driver-bug-workarounds \
+    --enable-logging=stderr \
+    --vmodule=*/media/*=3 \
     "$KIOSK_URL"

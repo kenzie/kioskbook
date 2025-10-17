@@ -20,8 +20,8 @@ fi
 # Build full URL with token
 KIOSK_URL="${DISPLAY_URL}?token=${DISPLAY_TOKEN}"
 
-# Wait a moment for network to be ready
-sleep 2
+# Build loading page URL with parameters
+LOADING_URL="file:///var/www/html/kioskbook-loading.html?url=${DISPLAY_URL}&token=${DISPLAY_TOKEN}"
 
 # Set VA-API driver for hardware video acceleration
 export LIBVA_DRIVER_NAME=radeonsi
@@ -52,4 +52,4 @@ exec chromium \
     --disable-gpu-driver-bug-workarounds \
     --enable-logging=stderr \
     --vmodule=*/media/*=3 \
-    "$KIOSK_URL"
+    "$LOADING_URL"

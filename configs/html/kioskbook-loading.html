@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KioskBook Loading</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #000000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            text-align: center;
+            color: white;
+        }
+
+        .logo {
+            width: 200px;
+            height: 200px;
+            margin: 0 auto 30px;
+        }
+
+        .logo img {
+            width: 100%;
+            height: 100%;
+        }
+
+        .message {
+            font-size: 16px;
+            color: white;
+            margin-bottom: 20px;
+        }
+
+        .progress-container {
+            width: 400px;
+            height: 4px;
+            background-color: #333;
+            margin: 0 auto;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background-color: white;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <img src="file:///usr/share/plymouth/themes/route19/route19-logo.png" alt="Route 19">
+        </div>
+        <div class="message" id="message">Waiting for Network...</div>
+        <div class="progress-container">
+            <div class="progress-bar" id="progress"></div>
+        </div>
+    </div>
+
+    <script>
+        // Get display config from URL params
+        const urlParams = new URLSearchParams(window.location.search);
+        const targetUrl = urlParams.get('url') || 'https://kioskbook.ca/display';
+        const token = urlParams.get('token') || '';
+        const fullUrl = token ? `${targetUrl}?token=${token}` : targetUrl;
+
+        const startTime = Date.now();
+        const maxWaitTime = 2000; // Wait maximum 2 seconds for network
+        let networkCheckComplete = false;
+
+        const progressBar = document.getElementById('progress');
+        const message = document.getElementById('message');
+
+        function navigateToApp(online) {
+            if (online) {
+                // Network available - save actual wait time for next boot
+                const actualWait = Date.now() - startTime;
+                localStorage.setItem('networkWaitTime', actualWait.toString());
+                message.textContent = 'Connected! Loading display...';
+            } else {
+                // Network unavailable - service worker will serve cached content
+                message.textContent = 'Loading display...';
+            }
+
+            progressBar.style.width = '100%';
+
+            setTimeout(() => {
+                window.location.href = fullUrl;
+            }, 300);
+        }
+
+        function updateProgress() {
+            const elapsed = Date.now() - startTime;
+            const progress = Math.min((elapsed / maxWaitTime) * 100, 95);
+            progressBar.style.width = progress + '%';
+        }
+
+        async function checkNetwork() {
+            if (networkCheckComplete) return;
+
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 1000);
+
+                await fetch(fullUrl, {
+                    method: 'HEAD',
+                    mode: 'no-cors',
+                    cache: 'no-cache',
+                    signal: controller.signal
+                });
+
+                clearTimeout(timeoutId);
+
+                // Network available!
+                networkCheckComplete = true;
+                navigateToApp(true);
+
+            } catch (error) {
+                // Network not ready, progress bar will continue
+                updateProgress();
+            }
+        }
+
+        // Update progress bar continuously
+        const progressInterval = setInterval(() => {
+            if (networkCheckComplete) {
+                clearInterval(progressInterval);
+                return;
+            }
+            updateProgress();
+        }, 100);
+
+        // Try network check immediately
+        checkNetwork();
+
+        // Try again after 1 second
+        setTimeout(() => {
+            if (!networkCheckComplete) checkNetwork();
+        }, 1000);
+
+        // After max wait time, navigate regardless of network status
+        setTimeout(() => {
+            if (!networkCheckComplete) {
+                clearInterval(progressInterval);
+                networkCheckComplete = true;
+                navigateToApp(false);
+            }
+        }, maxWaitTime);
+    </script>
+</body>
+</html>

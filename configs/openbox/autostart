@@ -20,8 +20,11 @@ fi
 # Build full URL with token
 KIOSK_URL="${DISPLAY_URL}?token=${DISPLAY_TOKEN}"
 
-# Build loading page URL with parameters
-LOADING_URL="file:///var/www/html/kioskbook-loading.html?url=${DISPLAY_URL}&token=${DISPLAY_TOKEN}"
+# Extract base URL (protocol and domain) from DISPLAY_URL
+BASE_URL=$(echo "$DISPLAY_URL" | sed 's|\(https\?://[^/]*\).*|\1|')
+
+# Build loading page URL with parameters (hosted on same domain as app)
+LOADING_URL="${BASE_URL}/loading.html?url=${DISPLAY_URL}&token=${DISPLAY_TOKEN}"
 
 # Set VA-API driver for hardware video acceleration
 export LIBVA_DRIVER_NAME=radeonsi

@@ -68,12 +68,6 @@ chown -R "$KIOSK_USER:$KIOSK_USER" "$KIOSK_HOME/.config"
 log_module "$module_name" "Configuring auto-login..."
 cp "$SCRIPT_DIR/configs/systemd/lightdm.conf" /etc/lightdm/lightdm.conf
 
-# Install loading page for graceful network wait
-log_module "$module_name" "Installing loading page..."
-mkdir -p /var/www/html
-cp "$SCRIPT_DIR/configs/html/kioskbook-loading.html" /var/www/html/kioskbook-loading.html
-chmod 644 /var/www/html/kioskbook-loading.html
-
 # Install systemd override for LightDM to wait for network
 log_module "$module_name" "Configuring network wait for display manager..."
 mkdir -p /etc/systemd/system/lightdm.service.d

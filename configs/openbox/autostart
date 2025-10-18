@@ -18,7 +18,7 @@ else
 fi
 
 # Build full URL with token
-KIOSK_URL="${DISPLAY_URL}?token=${DISPLAY_TOKEN}"
+KIOSK_URL="${DISPLAY_URL}/${DISPLAY_TOKEN}"
 
 # Set VA-API driver for hardware video acceleration
 export LIBVA_DRIVER_NAME=radeonsi

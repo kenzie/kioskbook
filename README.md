@@ -37,10 +37,10 @@ git clone https://github.com/kenzie/kioskbook.git
 cd kioskbook
 
 # Run installer
-sudo ./install.sh [github_repo] [tailscale_key]
+sudo ./install.sh [display_token] [tailscale_key]
 
 # Arguments (optional):
-#   github_repo    - Vue.js app repository (default: kenzie/lobby-display)
+#   display_token  - Authorization token for kioskbook.ca display service
 #   tailscale_key  - Tailscale auth key for VPN access
 ```
 
@@ -54,7 +54,7 @@ System will:
 - Boot in under 10 seconds with Route 19 branded Plymouth splash
 - Auto-login as kiosk user
 - Launch Chromium in full-screen kiosk mode
-- Display your Vue.js application on port 5173
+- Display the external kiosk service at https://kioskbook.ca/display
 
 ## Management with kiosk CLI
 
@@ -84,9 +84,8 @@ sudo kiosk update 70-services
 sudo kiosk update all
 
 # Restart services
-sudo kiosk restart app       # Restart application
 sudo kiosk restart display   # Restart display manager
-sudo kiosk restart all       # Restart both
+sudo kiosk restart all       # Restart all services
 
 # Run maintenance
 sudo kiosk maintenance
@@ -104,7 +103,7 @@ kioskbook/
 │   ├── 20-network.sh      # SSH, Tailscale VPN
 │   ├── 30-display.sh      # X11, OpenBox, LightDM, Chromium
 │   ├── 40-fonts.sh        # Inter, CaskaydiaCove Nerd Font
-│   ├── 50-app.sh          # Node.js, application deployment
+│   ├── 50-app.sh          # Display URL configuration
 │   ├── 60-boot.sh         # Branded boot with Plymouth
 │   └── 70-services.sh     # Monitoring, recovery, maintenance
 ├── configs/               # All configuration files
@@ -191,18 +190,37 @@ kioskbook/
 
 ## Application Integration
 
-The default application is `kenzie/lobby-display`, but any Vue.js application works. Requirements:
+KioskBook displays an external web service at **https://kioskbook.ca/display** with token-based authentication.
 
-- **Node.js/npm-based** with production build (`npm run build`)
-- **Port 5173** (served via `npx serve` for production stability)
-- **Full-screen compatible** for kiosk display
-- **Offline-first** with cached JSON data support
+### Architecture
 
-To use a different application, pass the GitHub repository URL during installation:
+- **External Service**: Hosted at https://kioskbook.ca/display
+- **Token Authentication**: URL parameter-based (?token=ABCD-1234)
+- **Offline-First**: Service worker caching for offline operation
+- **Configuration**: Stored in `/etc/kioskbook/display.conf`
+- **Full-Screen Display**: Chromium kiosk mode with AMD GPU acceleration
+
+### Configuration
+
+Display URL and token are configured during installation or can be manually edited:
 
 ```bash
-sudo ./install.sh https://github.com/your-username/your-kiosk-app
+# View configuration
+cat /etc/kioskbook/display.conf
+
+# Edit configuration
+sudo vim /etc/kioskbook/display.conf
+
+# Apply changes
+sudo kiosk restart display
 ```
+
+### Benefits
+
+- **No Local Deployment**: Application updates happen on the server
+- **Instant Updates**: No kiosk system updates needed for app changes
+- **Centralized Management**: One codebase serves all kiosks
+- **Offline Resilience**: Service worker provides cached fallback
 
 ## Troubleshooting
 
@@ -215,7 +233,7 @@ kiosk health --detailed
 ### View Logs
 ```bash
 kiosk logs -f                      # Follow logs
-journalctl -u kioskbook-app -f     # Direct systemd logs
+journalctl -u lightdm -f           # Display service logs
 ```
 
 ### Restart Services
@@ -225,9 +243,8 @@ sudo kiosk restart all
 
 ### Manual Service Management
 ```bash
-systemctl status kioskbook-app
-systemctl status lightdm
-systemctl restart kioskbook-app
+systemctl status lightdm           # Display service status
+systemctl restart lightdm          # Restart display service
 ```
 
 ### Check Monitoring
